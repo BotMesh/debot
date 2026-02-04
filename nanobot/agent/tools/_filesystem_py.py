@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Any
 
-from nanobot.agent.tools.base import Tool
+from nanobot.agent.tools._base_py import Tool
 
 
 class ReadFileTool(Tool):

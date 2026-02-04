@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from nanobot.agent.tools.base import Tool
+from nanobot.agent.tools._base_py import Tool
 
 
 class ToolRegistry:
@@ -33,7 +33,18 @@ class ToolRegistry:
     
     def get_definitions(self) -> list[dict[str, Any]]:
         """Get all tool definitions in OpenAI format."""
-        return [tool.to_schema() for tool in self._tools.values()]
+        definitions = []
+        for tool in self._tools.values():
+            # Build schema from properties (works for both Python and Rust tools)
+            definitions.append({
+                "type": "function",
+                "function": {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "parameters": tool.parameters,
+                }
+            })
+        return definitions
     
     async def execute(self, name: str, params: dict[str, Any]) -> str:
         """

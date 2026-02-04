@@ -101,8 +101,8 @@ class LiteLLMProvider(LLMProvider):
         if self.is_vllm:
             model = f"hosted_vllm/{model}"
         
-        # For Gemini, ensure gemini/ prefix if not already present
-        if "gemini" in model.lower() and not model.startswith("gemini/"):
+        # For Gemini, ensure gemini/ prefix if not already present (skip for OpenRouter)
+        if "gemini" in model.lower() and not model.startswith(("gemini/", "openrouter/")):
             model = f"gemini/{model}"
         
         kwargs: dict[str, Any] = {

@@ -1,6 +1,10 @@
-"""Message bus module for decoupled channel-agent communication."""
+"""Message bus module - Rust implementation with Python fallback."""
 
-from nanobot.bus.events import InboundMessage, OutboundMessage
-from nanobot.bus.queue import MessageBus
+try:
+    from nanobot_rust import InboundMessage, OutboundMessage, MessageBus
+except ImportError:
+    # Fallback to pure Python if Rust extension not available
+    from nanobot.bus._events_py import InboundMessage, OutboundMessage
+    from nanobot.bus._queue_py import MessageBus
 
 __all__ = ["MessageBus", "InboundMessage", "OutboundMessage"]

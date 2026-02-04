@@ -159,7 +159,7 @@ def gateway(
 ):
     """Start the nanobot gateway."""
     from nanobot.config.loader import load_config, get_data_dir
-    from nanobot.bus.queue import MessageBus
+    from nanobot.bus import MessageBus
     from nanobot.providers.litellm_provider import LiteLLMProvider
     from nanobot.agent.loop import AgentLoop
     from nanobot.channels.manager import ChannelManager
@@ -214,7 +214,7 @@ def gateway(
         )
         # Optionally deliver to channel
         if job.payload.deliver and job.payload.to:
-            from nanobot.bus.events import OutboundMessage
+            from nanobot.bus import OutboundMessage
             await bus.publish_outbound(OutboundMessage(
                 channel=job.payload.channel or "whatsapp",
                 chat_id=job.payload.to,
@@ -283,7 +283,7 @@ def agent(
 ):
     """Interact with the agent directly."""
     from nanobot.config.loader import load_config
-    from nanobot.bus.queue import MessageBus
+    from nanobot.bus import MessageBus
     from nanobot.providers.litellm_provider import LiteLLMProvider
     from nanobot.agent.loop import AgentLoop
     

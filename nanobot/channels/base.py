@@ -3,8 +3,7 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
-from nanobot.bus.events import InboundMessage, OutboundMessage
-from nanobot.bus.queue import MessageBus
+from nanobot.bus import InboundMessage, OutboundMessage, MessageBus
 
 
 class BaseChannel(ABC):

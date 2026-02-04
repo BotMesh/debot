@@ -5,8 +5,7 @@ from typing import Any
 
 from loguru import logger
 
-from nanobot.bus.events import OutboundMessage
-from nanobot.bus.queue import MessageBus
+from nanobot.bus import OutboundMessage, MessageBus
 from nanobot.channels.base import BaseChannel
 from nanobot.config.schema import Config
 

@@ -7,8 +7,7 @@ from loguru import logger
 from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, ContextTypes
 
-from nanobot.bus.events import OutboundMessage
-from nanobot.bus.queue import MessageBus
+from nanobot.bus import OutboundMessage, MessageBus
 from nanobot.channels.base import BaseChannel
 from nanobot.config.schema import TelegramConfig
 

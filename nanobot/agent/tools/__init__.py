@@ -1,6 +1,43 @@
-"""Agent tools module."""
+"""Agent tools module - Rust implementation with Python fallback."""
 
-from nanobot.agent.tools.base import Tool
-from nanobot.agent.tools.registry import ToolRegistry
+# Always use Python ToolRegistry (handles Python-based tools like web, message, spawn)
+from nanobot.agent.tools._base_py import Tool
+from nanobot.agent.tools._registry_py import ToolRegistry
 
-__all__ = ["Tool", "ToolRegistry"]
+# Try to use Rust implementations for core tools (faster)
+try:
+    from nanobot_rust import (
+        ReadFileTool,
+        WriteFileTool,
+        EditFileTool,
+        ListDirTool,
+        ExecTool,
+    )
+except ImportError:
+    # Fallback to pure Python
+    from nanobot.agent.tools._filesystem_py import (
+        ReadFileTool,
+        WriteFileTool,
+        EditFileTool,
+        ListDirTool,
+    )
+    from nanobot.agent.tools._shell_py import ExecTool
+
+# These stay in Python (depend on Python callbacks/state)
+from nanobot.agent.tools.web import WebSearchTool, WebFetchTool
+from nanobot.agent.tools.message import MessageTool
+from nanobot.agent.tools.spawn import SpawnTool
+
+__all__ = [
+    "Tool",
+    "ToolRegistry",
+    "ReadFileTool",
+    "WriteFileTool",
+    "EditFileTool",
+    "ListDirTool",
+    "ExecTool",
+    "WebSearchTool",
+    "WebFetchTool",
+    "MessageTool",
+    "SpawnTool",
+]

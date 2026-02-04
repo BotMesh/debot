@@ -8,13 +8,17 @@ from typing import Any
 
 from loguru import logger
 
-from nanobot.bus.events import InboundMessage
-from nanobot.bus.queue import MessageBus
+from nanobot.bus import InboundMessage, MessageBus
 from nanobot.providers.base import LLMProvider
-from nanobot.agent.tools.registry import ToolRegistry
-from nanobot.agent.tools.filesystem import ReadFileTool, WriteFileTool, ListDirTool
-from nanobot.agent.tools.shell import ExecTool
-from nanobot.agent.tools.web import WebSearchTool, WebFetchTool
+from nanobot.agent.tools import (
+    ToolRegistry,
+    ReadFileTool,
+    WriteFileTool,
+    ListDirTool,
+    ExecTool,
+    WebSearchTool,
+    WebFetchTool,
+)
 
 
 class SubagentManager:
