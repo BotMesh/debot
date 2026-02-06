@@ -14,16 +14,29 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-# Install Python dependencies first (cached layer)
+# Copy files needed for dependency installation
 COPY pyproject.toml README.md LICENSE ./
-RUN mkdir -p nanobot bridge && touch nanobot/__init__.py && \
-    uv pip install --system --no-cache . && \
-    rm -rf nanobot bridge
+COPY rust/ rust/
 
-# Copy the full source and install
+# Install Rust toolchain for building Rust extension
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends build-essential pkg-config libssl-dev && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* && \
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && \
+    . $HOME/.cargo/env
+
+# Create placeholder Python package
+RUN mkdir -p nanobot bridge && touch nanobot/__init__.py
+
+# Install Python dependencies with Rust extension
+ENV PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1
+RUN . $HOME/.cargo/env && \
+    uv pip install --system --no-cache .
+
+# Copy the full source code
 COPY nanobot/ nanobot/
 COPY bridge/ bridge/
-RUN uv pip install --system --no-cache .
 
 # Build the WhatsApp bridge
 WORKDIR /app/bridge

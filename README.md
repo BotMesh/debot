@@ -428,6 +428,8 @@ nanobot cron remove <job_id>
 > [!TIP]
 > The `-v ~/.nanobot:/root/.nanobot` flag mounts your local config directory into the container, so your config and workspace persist across container restarts.
 
+### Build & Run Locally
+
 Build and run nanobot in a container:
 
 ```bash
@@ -447,6 +449,29 @@ docker run -v ~/.nanobot:/root/.nanobot -p 18790:18790 nanobot gateway
 docker run -v ~/.nanobot:/root/.nanobot --rm nanobot agent -m "Hello!"
 docker run -v ~/.nanobot:/root/.nanobot --rm nanobot status
 ```
+
+### 📦 Pull from GitHub Container Registry
+
+Pre-built images are automatically published to GitHub Container Registry:
+
+```bash
+# Pull latest image
+docker pull ghcr.io/BotMesh/nanobot:latest
+
+# Run with pulled image
+docker run -v ~/.nanobot:/root/.nanobot -p 18790:18790 ghcr.io/BotMesh/nanobot:latest gateway
+
+# Pull specific version
+docker pull ghcr.io/BotMesh/nanobot:v1.0.0
+```
+
+**Available Tags:**
+- `latest` — Latest main branch
+- `main` — Main branch  
+- `v1.0.0` — Release versions
+- `main-<short-sha>` — Specific commits
+
+For more info, see [Container Publishing Guide](./.github/CONTAINER_PUBLISHING.md)
 
 
 ## 🤝 Contribute & Roadmap
