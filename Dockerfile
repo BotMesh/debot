@@ -17,6 +17,8 @@ WORKDIR /app
 # Copy files needed for dependency installation
 COPY pyproject.toml README.md LICENSE ./
 COPY rust/ rust/
+COPY debot/ debot/
+COPY bridge/ bridge/
 
 # Install Rust toolchain for building Rust extension
 RUN apt-get update && \
@@ -26,17 +28,10 @@ RUN apt-get update && \
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && \
     . $HOME/.cargo/env
 
-# Create placeholder Python package
-RUN mkdir -p debot bridge && touch debot/__init__.py
-
 # Install Python dependencies with Rust extension
 ENV PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1
 RUN . $HOME/.cargo/env && \
     uv pip install --system --no-cache .
-
-# Copy the full source code
-COPY debot/ debot/
-COPY bridge/ bridge/
 
 # Build the WhatsApp bridge
 WORKDIR /app/bridge

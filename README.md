@@ -1,24 +1,23 @@
 <div align="center">
   <img src="debot_logo.png" alt="debot" width="500">
-  <h1>debot: Ultra-Lightweight Personal AI Assistant</h1>
+  <h1>Debot: The Lightweight and Secure OpenClaw</h1>
   <p>
-    <a href="https://pypi.org/project/debot-ai/"><img src="https://img.shields.io/pypi/v/debot-ai" alt="PyPI"></a>
-    <a href="https://pepy.tech/project/debot-ai"><img src="https://static.pepy.tech/badge/debot-ai" alt="Downloads"></a>
+    <a href="https://pypi.org/project/debot/"><img src="https://img.shields.io/pypi/v/debot" alt="PyPI"></a>
+    <a href="https://pepy.tech/project/debot"><img src="https://static.pepy.tech/badge/debot" alt="Downloads"></a>
+    <a href="https://github.com/BotMesh/debot/actions/workflows/ci.yml"><img src="https://github.com/BotMesh/debot/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
     <img src="https://img.shields.io/badge/python-≥3.11-blue" alt="Python">
     <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-    <a href="./COMMUNICATION.md"><img src="https://img.shields.io/badge/Feishu-Group-E9DBFC?style=flat&logo=feishu&logoColor=white" alt="Feishu"></a>
-    <a href="./COMMUNICATION.md"><img src="https://img.shields.io/badge/WeChat-Group-C5EAB4?style=flat&logo=wechat&logoColor=white" alt="WeChat"></a>
-    <a href="https://discord.gg/MnCvHqpUGB"><img src="https://img.shields.io/badge/Discord-Community-5865F2?style=flat&logo=discord&logoColor=white" alt="Discord"></a>
   </p>
 </div>
 
-🐈 **debot** is an **ultra-lightweight** personal AI assistant inspired by [Clawdbot](https://github.com/openclaw/openclaw) 
+🐈 **Debot** is a **lightweight** and **secure** personal AI assistant inspired by [Clawdbot](https://github.com/openclaw/openclaw) and [Nanobot](https://github.com/HKUDS/nanobot). 
 
-⚡️ Delivers core agent functionality in just **~4,000** lines of code — **99% smaller** than Clawdbot's 430k+ lines.
 
-## Key Features of debot:
+## Key Features of Debot:
 
 🪶 **Ultra-Lightweight**: Just ~4,000 lines of code — 99% smaller than Clawdbot - core functionality.
+
+🛡️ **Secure by Design**: Rust for core agent implementation, and minimal dependencies reduce attack surface and vulnerabilities.
 
 🔬 **Research-Ready**: Clean, readable code that's easy to understand, modify, and extend for research.
 
@@ -34,7 +33,7 @@ export PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1
 ```
 
 If you need to specify a particular Python executable for maturin builds, set `PYO3_PYTHON` to the interpreter path.
-💎 **Easy-to-Use**: One-click to depoly and you're ready to go.
+💎 **Easy-to-Use**: One-click to deploy and you're ready to go.
 
 ## 🏗️ Architecture
 
@@ -65,26 +64,42 @@ If you need to specify a particular Python executable for maturin builds, set `P
   </tr>
 </table>
 
+### Core Capabilities
+
+| Category | What Debot Can Do |
+|----------|-------------------|
+| ✍️ **Writing & Communication** | AI text humanization, content summarization, natural and human-like output |
+| 💻 **Software Engineering** | Test-driven development, systematic debugging, code review, git worktree management |
+| 🧠 **Planning & Design** | Brainstorming, implementation planning, subagent-driven parallel execution |
+| 🔍 **Research & Analysis** | Web search, real-time market analysis, URL and video summarization |
+| 📅 **Task Management** | Daily routines, scheduled tasks (cron), workflow automation |
+| 📚 **Knowledge & Memory** | Long-term memory, semantic search, personal knowledge base |
+
 ## 📦 Install
 
 **Install from source** (latest features, recommended for development)
 
+> [!NOTE]
+> Requires **Python ≥ 3.11** and a **Rust toolchain** (for the native extension). On Linux you also need `patchelf` (`pip install patchelf`).
+
 ```bash
 git clone https://github.com/BotMesh/debot.git
 cd debot
-pip install -e .
+python3 -m venv .venv
+source .venv/bin/activate
+pip install .
 ```
 
 **Install with [uv](https://github.com/astral-sh/uv)** (stable, fast)
 
 ```bash
-uv tool install debot-ai
+uv tool install debot
 ```
 
 **Install from PyPI** (stable)
 
 ```bash
-pip install debot-ai
+pip install debot
 ```
 
 ## 🚀 Quick Start
@@ -131,7 +146,7 @@ That's it! You have a working AI assistant in 2 minutes.
 
 ## 🖥️ Local Models (vLLM)
 
-Run debot with your own local models using vLLM or any OpenAI-compatible server.
+Run Debot with your own local models using vLLM or any OpenAI-compatible server.
 
 **1. Start your vLLM server**
 
@@ -165,7 +180,7 @@ debot agent -m "Hello from my local LLM!"
 
 ## 💾 Session Compaction
 
-debot automatically compacts long conversations to keep context windows efficient. When a conversation exceeds ~90% of the model's context window, old messages are summarized into a single "compaction" entry.
+Debot automatically compacts long conversations to keep context windows efficient. When a conversation exceeds ~90% of the model's context window, old messages are summarized into a single "compaction" entry.
 
 **Features:**
 - ✅ **Automatic** — Triggered silently when context limit approached
@@ -197,7 +212,7 @@ debot config compaction-model "anthropic/claude-opus-4-5" --keep-last 40
 
 ## 🚀 Intelligent Model Router
 
-debot includes a **built-in intelligent router** (powered by Rust) that automatically selects the best LLM model based on task complexity. This saves costs by routing simple queries to cheaper models while reserving powerful models for complex reasoning tasks.
+Debot includes a **built-in intelligent router** (powered by Rust) that automatically selects the best LLM model based on task complexity. This saves costs by routing simple queries to cheaper models while reserving powerful models for complex reasoning tasks.
 
 **How it works:**
 - Analyzes incoming prompts across 14 dimensions: reasoning difficulty, code complexity, multi-step reasoning, token count, creativity, technical depth, and more.
@@ -217,7 +232,7 @@ The router runs automatically — no configuration needed. You can customize the
 
 ## 🧠 Long-term memory
 
-debot stores persistent memory under your workspace at `memory/` (by default your workspace is `~/.debot/workspace`). The memory system supports:
+Debot stores persistent memory under your workspace at `memory/` (by default your workspace is `~/.debot/workspace`). The memory system supports:
 
 - `MEMORY.md` — long-term notes you want the agent to remember.
 - `YYYY-MM-DD.md` — daily notes.
@@ -225,22 +240,21 @@ debot stores persistent memory under your workspace at `memory/` (by default you
 
 How it works
 - The Rust extension (or the Python fallback) exposes `MemoryStore.build_index()` and `MemoryStore.search(query, max_results, min_score)` to build a local vector index and search it.
-- If `OPENAI_API_KEY` or `OPENROUTER_API_KEY` is set, debot will attempt to use the remote embeddings API and fall back to a deterministic local embedding when not available.
+- If `OPENAI_API_KEY` or `OPENROUTER_API_KEY` is set, Debot will attempt to use the remote embeddings API and fall back to a deterministic local embedding when not available.
 
 Quick enable & usage
 
 1. Build and install the Rust extension (in development environments with Python ≧ 3.14 you may need to set `PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1`):
 
 ```bash
+python3 -m venv .venv
 source .venv/bin/activate
-export PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1
-export PYO3_PYTHON=/opt/homebrew/bin/python3.14
-cd rust
-maturin build --release -m Cargo.toml
-cd ..
-pip install rust/target/wheels/*.whl
-pip install -e .
+pip install .          # builds the Rust extension automatically via maturin
 ```
+
+> [!TIP]
+> On Python ≥ 3.14 you may need `export PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1` before the install.
+> On Linux, install `patchelf` first: `pip install patchelf`.
 
 2. Optionally provide an embeddings key (recommended for better results):
 
@@ -277,7 +291,7 @@ Notes
 
 ## 💬 Chat Apps
 
-Talk to your debot through Telegram or WhatsApp — anytime, anywhere.
+Talk to your Debot through Telegram or WhatsApp — anytime, anywhere.
 
 | Channel | Setup |
 |---------|-------|
@@ -355,16 +369,52 @@ debot gateway
 
 ## 🎯 Built-in Skills
 
-debot comes with a set of powerful built-in skills to extend your agent's capabilities:
+debot comes with **21 built-in skills** covering the full development and writing lifecycle:
+
+**Development Workflow**
 
 | Skill | Description |
 |-------|-------------|
-| **github** 🐙 | Interact with GitHub using the `gh` CLI. Manage PRs, issues, CI runs, and advanced queries. Requires: `gh` binary |
-| **weather** ⛅ | Get weather info using wttr.in and Open-Meteo APIs. |
-| **summarize** 📄 | Summarize URLs, files, and YouTube videos. |
-| **tmux** 🖥️ | Remote-control tmux sessions for terminal automation. |
-| **humanizer** 🤖 | Humanize code, text, and outputs for better readability. |
-| **skill-creator** 🔧 | Create new custom skills programmatically. |
+| **brainstorming** 🧠 | Turn ideas into fully formed designs and specs through collaborative dialogue |
+| **writing-plans** 📝 | Create comprehensive implementation plans with bite-sized tasks |
+| **executing-plans** ▶️ | Execute plans with review checkpoints between batches |
+| **subagent-driven-development** 🤖 | Dispatch independent subagents per task with two-stage review |
+| **dispatching-parallel-agents** 🔀 | Run 2+ independent tasks in parallel across agents |
+| **finishing-a-development-branch** 🏁 | Guide branch completion — merge, PR, or cleanup |
+
+**Code Quality & Review**
+
+| Skill | Description |
+|-------|-------------|
+| **test-driven-development** 🧪 | Write tests first, watch them fail, implement minimal code to pass |
+| **systematic-debugging** 🔍 | Four-phase root cause investigation before attempting fixes |
+| **verification-before-completion** ✅ | Run verification commands and confirm output before claiming done |
+| **requesting-code-review** 📤 | Dispatch code-reviewer subagent to catch issues early |
+| **receiving-code-review** 📥 | Evaluate review feedback with rigor before implementing |
+
+**Writing & Communication**
+
+| Skill | Description |
+|-------|-------------|
+| **humanizer** ✍️ | Remove AI writing patterns to produce natural, human-like text |
+| **summarize** 📄 | Summarize URLs, files, and YouTube videos |
+
+**Tools & Infrastructure**
+
+| Skill | Description |
+|-------|-------------|
+| **github** 🐙 | Interact with GitHub using the `gh` CLI — PRs, issues, CI runs, and queries |
+| **weather** ⛅ | Get weather info using wttr.in and Open-Meteo APIs |
+| **tmux** 🖥️ | Remote-control tmux sessions for terminal automation |
+| **using-git-worktrees** 🌳 | Create isolated git worktrees for feature work |
+
+**Skill Management**
+
+| Skill | Description |
+|-------|-------------|
+| **skill-creator** 🔧 | Create and package new custom skills |
+| **writing-skills** 📖 | TDD-driven skill development and editing |
+| **find-skills** 🔎 | Discover available skills in workspace and system |
 
 **Usage:**
 
