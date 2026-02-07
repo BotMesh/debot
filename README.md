@@ -550,6 +550,7 @@ PRs welcome! The codebase is intentionally small and readable. 🤗
 
 - [x] **Voice Transcription** — Support for Groq Whisper (Issue #13)
 - [ ] **Multi-modal** — See and hear (images, voice, video)
+- [x] **Intelligent Model Router** — Automatically selects the best LLM model based on task complexity
 - [x] **Long-term memory** — Never forget important context
 - [ ] **Better reasoning** — Multi-step planning and reflection
 - [ ] **More integrations** — Discord, Slack, email, calendar
