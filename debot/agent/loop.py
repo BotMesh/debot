@@ -228,9 +228,24 @@ class AgentLoop:
         while iteration < self.max_iterations:
             iteration += 1
 
-            # Call LLM
+            # Call Rust router (if available) to choose model, then call LLM
+            chosen_model = self.model
+            try:
+                import debot_rust
+
+                decision_json = debot_rust.route_text(msg.content, max_tokens)
+                if decision_json:
+                    try:
+                        dec = json.loads(decision_json)
+                        chosen_model = dec.get("model", self.model)
+                    except Exception:
+                        chosen_model = self.model
+            except Exception:
+                # Router not available or failed; fall back to default model
+                chosen_model = self.model
+
             response = await self.provider.chat(
-                messages=messages, tools=self.tools.get_definitions(), model=self.model
+                messages=messages, tools=self.tools.get_definitions(), model=chosen_model
             )
 
             # Handle tool calls

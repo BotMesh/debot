@@ -6,6 +6,7 @@ mod cron;
 mod heartbeat;
 mod memory;
 mod messages;
+mod router;
 mod session;
 mod skills;
 mod tools;
@@ -61,6 +62,9 @@ fn debot_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<CronSchedule>()?;
     m.add_class::<CronPayload>()?;
     m.add_class::<CronJobState>()?;
+
+    // Router bindings
+    router::pybindings(m)?;
 
     Ok(())
 }
