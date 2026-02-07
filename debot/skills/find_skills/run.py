@@ -6,9 +6,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
-
-from debot.utils.helpers import get_skills_path
+from typing import Dict, List
 
 
 def _list_dir_skills(dir_path: Path) -> List[str]:
