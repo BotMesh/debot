@@ -135,8 +135,15 @@ class LiteLLMProvider(LLMProvider):
                 "input too long",
                 "reduce your prompt",
             )
+            # Classify billing/credits errors for auto-downgrade
+            billing_keywords = (
+                "credits", "afford", "402", "billing",
+                "payment", "insufficient", "quota", "budget",
+            )
             if any(kw in err_str for kw in context_keywords):
                 finish_reason = "context_length_exceeded"
+            elif any(kw in err_str for kw in billing_keywords):
+                finish_reason = "insufficient_credits"
             else:
                 finish_reason = "error"
             return LLMResponse(

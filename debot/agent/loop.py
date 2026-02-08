@@ -284,36 +284,91 @@ class AgentLoop:
                 messages=messages, tools=self.tools.get_definitions(), model=chosen_model
             )
 
-            # Auto-escalate: if model failed, try next tier (up to 3 escalations)
-            if (
-                _debot_rust
-                and current_tier
-                and response.finish_reason in ("error", "context_length_exceeded")
-            ):
-                for _esc in range(3):
-                    fb_json = _debot_rust.get_fallback_model(current_tier)
-                    if not fb_json:
-                        break
-                    fb = json.loads(fb_json)
-                    logger.warning(
-                        "Escalating: {} ({}) failed [{}] → {} ({})",
-                        chosen_model,
-                        current_tier,
-                        response.finish_reason,
-                        fb["model"],
-                        fb["tier"],
-                    )
+            # Auto-reroute on failure
+            _fail_reasons = ("error", "context_length_exceeded", "insufficient_credits")
+            if _debot_rust and current_tier and response.finish_reason in _fail_reasons:
+                if response.finish_reason == "insufficient_credits":
+                    # Billing error strategy:
+                    #   1) Try same-tier alternatives (cheaper models that handle same complexity)
+                    #   2) If all same-tier alternatives exhausted, escalate to next tier
+                    tried = {chosen_model}
+                    rerouted = False
+                    # Phase 1: same-tier alternatives sorted by cost ascending
                     try:
-                        _debot_rust.record_escalation()
+                        alts = json.loads(_debot_rust.get_tier_alternatives(current_tier))
                     except Exception:
-                        pass
-                    chosen_model = fb["model"]
-                    current_tier = fb["tier"]
-                    response = await self.provider.chat(
-                        messages=messages, tools=self.tools.get_definitions(), model=chosen_model
-                    )
-                    if response.finish_reason not in ("error", "context_length_exceeded"):
-                        break
+                        alts = []
+                    for alt in alts:
+                        if alt["model"] in tried:
+                            continue
+                        tried.add(alt["model"])
+                        logger.warning(
+                            "Billing fallback: {} failed [{}] → trying same-tier {} (${:.2f}/M)",
+                            chosen_model, response.finish_reason,
+                            alt["model"], alt["cost"],
+                        )
+                        try:
+                            _debot_rust.record_escalation()
+                        except Exception:
+                            pass
+                        chosen_model = alt["model"]
+                        response = await self.provider.chat(
+                            messages=messages, tools=self.tools.get_definitions(), model=chosen_model
+                        )
+                        if response.finish_reason not in _fail_reasons:
+                            rerouted = True
+                            break
+                    # Phase 2: same-tier exhausted, escalate up tier by tier
+                    if not rerouted and response.finish_reason in _fail_reasons:
+                        esc_tier = current_tier
+                        for _esc in range(3):
+                            fb_json = _debot_rust.get_fallback_model(esc_tier)
+                            if not fb_json:
+                                break
+                            fb = json.loads(fb_json)
+                            if fb["model"] in tried:
+                                esc_tier = fb["tier"]
+                                continue
+                            tried.add(fb["model"])
+                            logger.warning(
+                                "Billing fallback: same-tier exhausted, escalating → {} ({})",
+                                fb["model"], fb["tier"],
+                            )
+                            try:
+                                _debot_rust.record_escalation()
+                            except Exception:
+                                pass
+                            chosen_model = fb["model"]
+                            current_tier = fb["tier"]
+                            esc_tier = fb["tier"]
+                            response = await self.provider.chat(
+                                messages=messages, tools=self.tools.get_definitions(), model=chosen_model
+                            )
+                            if response.finish_reason not in _fail_reasons:
+                                break
+                else:
+                    # Context / other errors → escalate to more capable model
+                    for _esc in range(3):
+                        fb_json = _debot_rust.get_fallback_model(current_tier)
+                        if not fb_json:
+                            break
+                        fb = json.loads(fb_json)
+                        logger.warning(
+                            "Escalating: {} ({}) failed [{}] → {} ({})",
+                            chosen_model, current_tier, response.finish_reason,
+                            fb["model"], fb["tier"],
+                        )
+                        try:
+                            _debot_rust.record_escalation()
+                        except Exception:
+                            pass
+                        chosen_model = fb["model"]
+                        current_tier = fb["tier"]
+                        response = await self.provider.chat(
+                            messages=messages, tools=self.tools.get_definitions(), model=chosen_model
+                        )
+                        if response.finish_reason not in _fail_reasons:
+                            break
 
             # Handle tool calls
             if response.has_tool_calls:
