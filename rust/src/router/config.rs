@@ -23,3 +23,12 @@ pub fn tier_model_map() -> HashMap<&'static str, &'static str> {
     m.insert("REASONING", "openai/o3");
     m
 }
+
+/// Ordered tier list from lowest to highest complexity.
+pub const TIER_ORDER: [&str; 4] = ["SIMPLE", "MEDIUM", "COMPLEX", "REASONING"];
+
+/// Returns the next higher tier for escalation, or None if already at top.
+pub fn next_tier(current: &str) -> Option<&'static str> {
+    let idx = TIER_ORDER.iter().position(|t| *t == current)?;
+    TIER_ORDER.get(idx + 1).copied()
+}
