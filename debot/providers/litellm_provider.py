@@ -22,6 +22,7 @@ class LiteLLMProvider(LLMProvider):
         api_key: str | None = None,
         api_base: str | None = None,
         default_model: str = "anthropic/claude-opus-4-5",
+        all_api_keys: dict[str, str] | None = None,
     ):
         super().__init__(api_key, api_base)
         self.default_model = default_model
@@ -34,24 +35,38 @@ class LiteLLMProvider(LLMProvider):
         # Track if using custom endpoint (vLLM, etc.)
         self.is_vllm = bool(api_base) and not self.is_openrouter
 
-        # Configure LiteLLM based on provider
+        # Set ALL configured provider API keys so LiteLLM can route across
+        # providers during fallback (e.g. OpenRouter credits exhausted → Anthropic direct).
+        _key_env_map = {
+            "openrouter": "OPENROUTER_API_KEY",
+            "anthropic": "ANTHROPIC_API_KEY",
+            "openai": "OPENAI_API_KEY",
+            "gemini": "GEMINI_API_KEY",
+            "groq": "GROQ_API_KEY",
+            "zhipu": "ZHIPUAI_API_KEY",
+        }
+        if all_api_keys:
+            for provider_name, key in all_api_keys.items():
+                env_var = _key_env_map.get(provider_name)
+                if env_var and key:
+                    os.environ.setdefault(env_var, key)
+
+        # Configure primary provider key (overrides setdefault above)
         if api_key:
             if self.is_openrouter:
-                # OpenRouter mode - set key
                 os.environ["OPENROUTER_API_KEY"] = api_key
             elif self.is_vllm:
-                # vLLM/custom endpoint - uses OpenAI-compatible API
                 os.environ["OPENAI_API_KEY"] = api_key
             elif "anthropic" in default_model:
-                os.environ.setdefault("ANTHROPIC_API_KEY", api_key)
+                os.environ["ANTHROPIC_API_KEY"] = api_key
             elif "openai" in default_model or "gpt" in default_model:
-                os.environ.setdefault("OPENAI_API_KEY", api_key)
+                os.environ["OPENAI_API_KEY"] = api_key
             elif "gemini" in default_model.lower():
-                os.environ.setdefault("GEMINI_API_KEY", api_key)
+                os.environ["GEMINI_API_KEY"] = api_key
             elif "zhipu" in default_model or "glm" in default_model or "zai" in default_model:
-                os.environ.setdefault("ZHIPUAI_API_KEY", api_key)
+                os.environ["ZHIPUAI_API_KEY"] = api_key
             elif "groq" in default_model:
-                os.environ.setdefault("GROQ_API_KEY", api_key)
+                os.environ["GROQ_API_KEY"] = api_key
 
         if api_base:
             litellm.api_base = api_base
@@ -82,9 +97,18 @@ class LiteLLMProvider(LLMProvider):
         """
         model = model or self.default_model
 
-        # For OpenRouter, prefix model name if not already prefixed
+        # For OpenRouter, prefix model name — but skip if the model's native
+        # provider has a direct API key configured (cross-provider fallback).
         if self.is_openrouter and not model.startswith("openrouter/"):
-            model = f"openrouter/{model}"
+            # Check if a direct provider key is available for this model
+            _direct_available = (
+                (model.startswith("anthropic/") and os.environ.get("ANTHROPIC_API_KEY"))
+                or (model.startswith("openai/") and os.environ.get("OPENAI_API_KEY"))
+                or (model.startswith("groq/") and os.environ.get("GROQ_API_KEY"))
+                or (model.startswith("gemini/") and os.environ.get("GEMINI_API_KEY"))
+            )
+            if not _direct_available:
+                model = f"openrouter/{model}"
 
         # For Zhipu/Z.ai, ensure prefix is present
         # Handle cases like "glm-4.7-flash" -> "zhipu/glm-4.7-flash"
@@ -111,8 +135,10 @@ class LiteLLMProvider(LLMProvider):
             "temperature": temperature,
         }
 
-        # Pass api_base directly for custom endpoints (vLLM, etc.)
-        if self.api_base:
+        # Pass api_base for custom endpoints — but NOT for direct-provider calls
+        # (cross-provider fallback should hit the native API, not OpenRouter).
+        _is_direct = not model.startswith("openrouter/") and not model.startswith("hosted_vllm/")
+        if self.api_base and not _is_direct:
             kwargs["api_base"] = self.api_base
 
         if tools:

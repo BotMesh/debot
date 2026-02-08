@@ -134,6 +134,23 @@ class Config(BaseSettings):
             or None
         )
 
+    def get_all_api_keys(self) -> dict[str, str]:
+        """Return all configured provider API keys (non-empty only)."""
+        keys: dict[str, str] = {}
+        if self.providers.openrouter.api_key:
+            keys["openrouter"] = self.providers.openrouter.api_key
+        if self.providers.anthropic.api_key:
+            keys["anthropic"] = self.providers.anthropic.api_key
+        if self.providers.openai.api_key:
+            keys["openai"] = self.providers.openai.api_key
+        if self.providers.gemini.api_key:
+            keys["gemini"] = self.providers.gemini.api_key
+        if self.providers.groq.api_key:
+            keys["groq"] = self.providers.groq.api_key
+        if self.providers.zhipu.api_key:
+            keys["zhipu"] = self.providers.zhipu.api_key
+        return keys
+
     def get_api_base(self) -> str | None:
         """Get API base URL if using OpenRouter, Zhipu or vLLM."""
         if self.providers.openrouter.api_key:

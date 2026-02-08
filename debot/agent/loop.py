@@ -370,6 +370,19 @@ class AgentLoop:
                         if response.finish_reason not in _fail_reasons:
                             break
 
+            # If all fallbacks exhausted, give a friendly error instead of raw API dump
+            if response.finish_reason == "insufficient_credits":
+                response.content = (
+                    "All available models failed due to insufficient credits. "
+                    "Please top up your API provider credits and try again.\n\n"
+                    "OpenRouter: https://openrouter.ai/settings/credits"
+                )
+            elif response.finish_reason == "context_length_exceeded":
+                response.content = (
+                    "The conversation is too long for all available models. "
+                    "Try starting a new conversation or use /compact to compress history."
+                )
+
             # Handle tool calls
             if response.has_tool_calls:
                 # Add assistant message with tool calls
