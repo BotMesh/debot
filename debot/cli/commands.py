@@ -315,7 +315,8 @@ def gateway(
         raise typer.Exit(1)
 
     provider = LiteLLMProvider(
-        api_key=api_key, api_base=api_base, default_model=config.agents.defaults.model
+        api_key=api_key, api_base=api_base, default_model=config.agents.defaults.model,
+        all_api_keys=config.get_all_api_keys(),
     )
 
     # Create agent
@@ -423,7 +424,8 @@ def agent(
 
     bus = MessageBus()
     provider = LiteLLMProvider(
-        api_key=api_key, api_base=api_base, default_model=config.agents.defaults.model
+        api_key=api_key, api_base=api_base, default_model=config.agents.defaults.model,
+        all_api_keys=config.get_all_api_keys(),
     )
 
     agent_loop = AgentLoop(
