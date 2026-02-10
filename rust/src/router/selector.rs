@@ -36,8 +36,18 @@ pub fn select_model(scores: &HashMap<&str, f32>) -> (String, String, f32, f64, S
         "SIMPLE"
     };
 
-    let map = config::tier_model_map();
-    let model = map.get(tier).unwrap_or(&"openai/gpt-4o-mini").to_string();
+    let map = config::available_tier_model_map();
+    let model = map
+        .get(tier)
+        .copied()
+        .unwrap_or_else(|| {
+            // Fallback: try any available model from alternatives
+            let alts = config::tier_alternatives();
+            let alt_list = alts.get(tier).cloned().unwrap_or_default();
+            let available = config::filter_available_models(alt_list);
+            available.first().copied().unwrap_or("openai/gpt-4o-mini")
+        })
+        .to_string();
 
     // cost estimate from catalog
     let pricing = catalog::default_pricing();

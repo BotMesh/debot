@@ -263,6 +263,9 @@ def config_compaction_model(
 def gateway(
     port: int = typer.Option(18790, "--port", "-p", help="Gateway port"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
+    log_stdout: bool = typer.Option(
+        False, "--log-stdout/--no-log-stdout", help="Also log to stdout (in addition to stderr)"
+    ),
 ):
     """Start the debot gateway."""
     from debot.agent.loop import AgentLoop
@@ -278,9 +281,29 @@ def gateway(
 
         logging.basicConfig(level=logging.DEBUG)
 
+    if log_stdout:
+        import sys
+        from loguru import logger
+
+        logger.add(sys.stdout, level="INFO")
+        logger.info("Loguru: stdout sink enabled for agent")
+        logger.info("Loguru: stdout sink enabled for gateway")
+
     console.print(f"{__logo__} Starting debot gateway on port {port}...")
 
     config = load_config()
+
+    # Tell Rust router which providers have API keys
+    try:
+        import debot_rust
+
+        provider_names = list(config.get_all_api_keys().keys())
+        debot_rust.configure_providers(provider_names)
+        console.print(
+            f"[green]✓[/green] Router providers: {', '.join(provider_names) or 'none (all models available)'}"
+        )
+    except ImportError:
+        pass
 
     # Create components
     bus = MessageBus()
@@ -296,11 +319,22 @@ def gateway(
         console.print("Set one in ~/.debot/config.json under providers.openrouter.apiKey")
         raise typer.Exit(1)
 
+    # Build per-model custom endpoint overrides (e.g. NVIDIA, Moonshot API)
+    # Tuple: (api_key, api_base, strip_prefix)
+    custom_models: dict[str, tuple[str, str, bool]] = {}
+    if config.providers.nvidia.api_key:
+        nvidia_base = config.providers.nvidia.api_base or "https://integrate.api.nvidia.com/v1"
+        custom_models["moonshotai/"] = (config.providers.nvidia.api_key, nvidia_base, False)
+    if config.providers.moonshotai.api_key:
+        moonshot_base = config.providers.moonshotai.api_base or "https://api.moonshot.cn/v1"
+        custom_models["moonshotai/"] = (config.providers.moonshotai.api_key, moonshot_base, True)
+
     provider = LiteLLMProvider(
         api_key=api_key,
         api_base=api_base,
         default_model=config.agents.defaults.model,
         all_api_keys=config.get_all_api_keys(),
+        custom_models=custom_models,
     )
 
     # Create agent
@@ -404,6 +438,9 @@ def gateway(
 def agent(
     message: str = typer.Option(None, "--message", "-m", help="Message to send to the agent"),
     session_id: str = typer.Option("cli:default", "--session", "-s", help="Session ID"),
+    log_stdout: bool = typer.Option(
+        False, "--log-stdout/--no-log-stdout", help="Also log to stdout (in addition to stderr)"
+    ),
 ):
     """Interact with the agent directly."""
     from debot.agent.loop import AgentLoop
@@ -412,6 +449,14 @@ def agent(
     from debot.providers.litellm_provider import LiteLLMProvider
 
     config = load_config()
+
+    # Tell Rust router which providers have API keys
+    try:
+        import debot_rust
+
+        debot_rust.configure_providers(list(config.get_all_api_keys().keys()))
+    except ImportError:
+        pass
 
     api_key = config.get_api_key()
     api_base = config.get_api_base()
@@ -423,12 +468,30 @@ def agent(
         raise typer.Exit(1)
 
     bus = MessageBus()
+
+    # Build per-model custom endpoint overrides (e.g. NVIDIA, Moonshot API)
+    # Tuple: (api_key, api_base, strip_prefix)
+    custom_models: dict[str, tuple[str, str, bool]] = {}
+    if config.providers.nvidia.api_key:
+        nvidia_base = config.providers.nvidia.api_base or "https://integrate.api.nvidia.com/v1"
+        custom_models["moonshotai/"] = (config.providers.nvidia.api_key, nvidia_base, False)
+    if config.providers.moonshotai.api_key:
+        moonshot_base = config.providers.moonshotai.api_base or "https://api.moonshot.cn/v1"
+        custom_models["moonshotai/"] = (config.providers.moonshotai.api_key, moonshot_base, True)
+
     provider = LiteLLMProvider(
         api_key=api_key,
         api_base=api_base,
         default_model=config.agents.defaults.model,
         all_api_keys=config.get_all_api_keys(),
+        custom_models=custom_models,
     )
+
+    if log_stdout:
+        import sys
+        from loguru import logger
+
+        logger.add(sys.stdout, level="INFO")
 
     agent_loop = AgentLoop(
         bus=bus,
@@ -928,6 +991,15 @@ def router_test(
 
     try:
         import debot_rust
+
+        # Configure provider filtering so router test reflects real behavior
+        try:
+            from debot.config.loader import load_config as _load_config
+
+            _cfg = _load_config()
+            debot_rust.configure_providers(list(_cfg.get_all_api_keys().keys()))
+        except Exception:
+            pass
 
         decision_json = debot_rust.route_text(prompt, 4096)
         dec = _json.loads(decision_json)

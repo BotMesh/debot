@@ -17,20 +17,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Install ruff
-        run: pip install ruff
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        timeout-minutes: 30
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
 
-      - name: Run ruff check
-        run: ruff check debot/
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
 
-      - name: Run ruff format check
-        run: ruff format --check debot/
+      - name: Run lint via Makefile
+        run: make lint
 
   test:
     name: Test (Python ${{ matrix.python-version }})
@@ -61,21 +67,8 @@ jobs:
         with:
           workspaces: rust
 
-      - name: Install maturin
-        run: pip install maturin
-
-      - name: Build Rust extension
-        run: maturin build --release -m rust/Cargo.toml
-
-      - name: Install package with dev dependencies
-        run: |
-          # Ensure PyO3 accepts newer Python via ABI3 forward compatibility during nested builds
-          export PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1
-          pip install rust/target/wheels/*.whl
-          pip install ".[dev]"
-
-      - name: Run tests
-        run: pytest tests/ -v --tb=short
+      - name: Run tests via Makefile
+        run: make test
 
   rust-lint:
     name: Rust Lint
