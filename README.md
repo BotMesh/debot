@@ -603,13 +603,13 @@ Pre-built images are automatically published to GitHub Container Registry:
 
 ```bash
 # Pull latest image
-docker pull ghcr.io/BotMesh/debot:latest
+docker pull ghcr.io/botmesh/debot:latest
 
 # Run with pulled image
-docker run -v ~/.debot:/root/.debot -p 18790:18790 ghcr.io/BotMesh/debot:latest gateway
+docker run -v ~/.debot:/root/.debot -p 18790:18790 ghcr.io/botmesh/debot:latest gateway
 
 # Pull specific version
-docker pull ghcr.io/BotMesh/debot:v1.0.0
+docker pull ghcr.io/botmesh/debot:v1.0.0
 ```
 
 **Available Tags:**
@@ -635,7 +635,7 @@ make lint          # Run ruff linter
 **First-time setup:**
 
 ```bash
-git clone https://github.com/BotMesh/debot.git
+git clone https://github.com/botmesh/debot.git
 cd debot
 python3 -m venv .venv
 source .venv/bin/activate
