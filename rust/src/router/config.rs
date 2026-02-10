@@ -141,7 +141,6 @@ pub fn tier_alternatives() -> HashMap<&'static str, Vec<&'static str>> {
             "groq/llama-3.3-70b-versatile", // free tier
             "deepseek/deepseek-chat",       // $0.42
             "openai/gpt-4o-mini",           // $0.60
-            "moonshotai/kimi-k2.5",         // $1.40 (nvidia)
             "openai/gpt-3.5-turbo",         // $1.50
             "anthropic/claude-haiku-3-5",   // $5.00
         ],
@@ -153,7 +152,6 @@ pub fn tier_alternatives() -> HashMap<&'static str, Vec<&'static str>> {
             "deepseek/deepseek-chat",       // $0.42
             "openai/gpt-4o-mini",           // $0.60
             "minimax/minimax-m2",           // $1.20
-            "moonshotai/kimi-k2.5",         // $1.40 (nvidia)
             "anthropic/claude-haiku-3-5",   // $5.00
         ],
     );
@@ -161,7 +159,6 @@ pub fn tier_alternatives() -> HashMap<&'static str, Vec<&'static str>> {
         "COMPLEX",
         vec![
             "groq/llama-3.3-70b-versatile", // free tier (best-effort)
-            "moonshotai/kimi-k2.5",         // $1.40 (nvidia)
             "openai/gpt-4o",                // $10.00
             "anthropic/claude-sonnet-4-5",  // $15.00
             "anthropic/claude-opus-4-5",    // $25.00
