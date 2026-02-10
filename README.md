@@ -601,9 +601,6 @@ docker pull ghcr.io/BotMesh/debot:latest
 
 # Run with pulled image
 docker run -v ~/.debot:/root/.debot -p 18790:18790 ghcr.io/BotMesh/debot:latest gateway
-
-# Pull specific version
-docker pull ghcr.io/BotMesh/debot:v1.0.0
 ```
 
 **Available Tags:**
