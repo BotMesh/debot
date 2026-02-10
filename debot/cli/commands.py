@@ -359,6 +359,21 @@ def gateway(
 
     console.print("[green]✓[/green] Heartbeat: every 30m")
 
+    # Create web management UI
+    from debot.web import create_app
+
+    web_app = create_app(channel_manager=channels, cron_service=cron)
+
+    async def _run_web_server(app, host: str, port: int):
+        import uvicorn
+
+        uvi_config = uvicorn.Config(app, host=host, port=port, log_level="info")
+        server = uvicorn.Server(uvi_config)
+        await server.serve()
+
+    web_host = config.gateway.host
+    console.print(f"[green]✓[/green] Web UI: http://{web_host}:{port}")
+
     async def run():
         try:
             # Run all services concurrently (they all have infinite loops)
@@ -367,6 +382,7 @@ def gateway(
                 heartbeat.start(),
                 agent.run(),
                 channels.start_all(),
+                _run_web_server(web_app, host=web_host, port=port),
             )
         except KeyboardInterrupt:
             console.print("\nShutting down...")

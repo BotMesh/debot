@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>debot Gateway</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
+  <link rel="stylesheet" href="/style.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+  <script src="/app.js"></script>
+</head>
+<body x-data="gateway">
+
+  <!-- Navbar -->
+  <nav>
+    <ul>
+      <li><span class="brand">&#x1F408; debot</span><span class="version" x-text="status ? 'v'+status.version : ''"></span></li>
+    </ul>
+    <ul>
+      <li><a href="/docs" target="_blank">API Docs</a></li>
+    </ul>
+  </nav>
+
+  <!-- Tabs -->
+  <div role="tablist">
+    <button role="tab" :aria-selected="tab==='dashboard'" @click="tab='dashboard'; fetchStatus()">Dashboard</button>
+    <button role="tab" :aria-selected="tab==='providers'" @click="tab='providers'; fetchConfig()">Providers</button>
+    <button role="tab" :aria-selected="tab==='channels'"  @click="tab='channels';  fetchConfig()">Channels</button>
+    <button role="tab" :aria-selected="tab==='agent'"     @click="tab='agent';     fetchConfig()">Agent</button>
+    <button role="tab" :aria-selected="tab==='tools'"     @click="tab='tools';     fetchConfig()">Tools</button>
+  </div>
+
+  <!-- ==================== Dashboard ==================== -->
+  <section x-show="tab==='dashboard'">
+    <template x-if="status">
+      <div>
+        <div class="status-grid">
+          <article class="status-card">
+            <div class="label">Uptime</div>
+            <div class="value" x-text="formatUptime(status.uptime_s)"></div>
+          </article>
+          <article class="status-card">
+            <div class="label">Cron Jobs</div>
+            <div class="value" x-text="status.cron.jobs"></div>
+          </article>
+          <article class="status-card">
+            <div class="label">Channels</div>
+            <div class="value" x-text="channelList().length"></div>
+          </article>
+        </div>
+
+        <!-- Channel status -->
+        <h4>Channels</h4>
+        <template x-if="channelList().length">
+          <table>
+            <thead><tr><th>Channel</th><th>Running</th></tr></thead>
+            <tbody>
+              <template x-for="ch in channelList()" :key="ch.name">
+                <tr>
+                  <td x-text="ch.name"></td>
+                  <td>
+                    <span class="dot" :class="ch.running ? 'green' : 'gray'"></span>
+                    <span x-text="ch.running ? 'running' : 'stopped'"></span>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </template>
+        <template x-if="!channelList().length">
+          <p>No channels enabled.</p>
+        </template>
+
+        <!-- Cron jobs -->
+        <h4>Cron Jobs</h4>
+        <template x-if="cronJobs.length">
+          <table>
+            <thead><tr><th>Name</th><th>Schedule</th><th>Status</th><th>Next Run</th><th>Last Run</th></tr></thead>
+            <tbody>
+              <template x-for="j in cronJobs" :key="j.id">
+                <tr>
+                  <td x-text="j.name"></td>
+                  <td x-text="j.schedule.expr || (j.schedule.every_ms ? 'every '+(j.schedule.every_ms/1000)+'s' : 'once')"></td>
+                  <td>
+                    <span class="dot" :class="j.enabled ? 'green' : 'gray'"></span>
+                    <span x-text="j.last_status || (j.enabled ? 'pending' : 'disabled')"></span>
+                  </td>
+                  <td x-text="formatTime(j.next_run_at_ms)"></td>
+                  <td x-text="formatTime(j.last_run_at_ms)"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </template>
+        <template x-if="!cronJobs.length">
+          <p>No scheduled jobs.</p>
+        </template>
+      </div>
+    </template>
+    <template x-if="!status">
+      <p aria-busy="true">Loading...</p>
+    </template>
+  </section>
+
+  <!-- ==================== Providers ==================== -->
+  <section x-show="tab==='providers'">
+    <template x-if="config">
+      <form @submit.prevent="saveSection('providers')">
+        <template x-for="name in providerNames()" :key="name">
+          <fieldset class="field-group">
+            <h4 x-text="name"></h4>
+            <label>
+              API Key
+              <input type="text"
+                :value="config.providers[name].api_key"
+                @input="config.providers[name].api_key = $event.target.value"
+                :placeholder="isMasked(config.providers[name].api_key) ? '(configured - enter new value to change)' : name + ' API key'" />
+            </label>
+            <label>
+              API Base URL
+              <input type="text"
+                :value="config.providers[name].api_base || ''"
+                @input="config.providers[name].api_base = $event.target.value || null"
+                placeholder="Custom base URL (optional)" />
+            </label>
+          </fieldset>
+        </template>
+        <button type="submit">Save Providers</button>
+      </form>
+    </template>
+  </section>
+
+  <!-- ==================== Channels ==================== -->
+  <section x-show="tab==='channels'">
+    <template x-if="config">
+      <form @submit.prevent="saveSection('channels')">
+        <!-- Telegram -->
+        <fieldset class="field-group">
+          <h4>Telegram</h4>
+          <label>
+            <input type="checkbox" role="switch" x-model="config.channels.telegram.enabled" />
+            Enabled
+          </label>
+          <label>
+            Bot Token
+            <input type="text"
+              :value="config.channels.telegram.token"
+              @input="config.channels.telegram.token = $event.target.value"
+              :placeholder="isMasked(config.channels.telegram.token) ? '(configured - enter new value to change)' : 'Bot token from @BotFather'" />
+          </label>
+          <label>
+            Allowed User IDs
+            <input type="text"
+              :value="(config.channels.telegram.allow_from || []).join(', ')"
+              @input="config.channels.telegram.allow_from = $event.target.value.split(',').map(s => s.trim()).filter(Boolean)"
+              placeholder="Comma-separated user IDs" />
+          </label>
+        </fieldset>
+        <!-- WhatsApp -->
+        <fieldset class="field-group">
+          <h4>WhatsApp</h4>
+          <label>
+            <input type="checkbox" role="switch" x-model="config.channels.whatsapp.enabled" />
+            Enabled
+          </label>
+          <label>
+            Bridge URL
+            <input type="text" x-model="config.channels.whatsapp.bridge_url" placeholder="ws://localhost:3001" />
+          </label>
+          <label>
+            Allowed Phone Numbers
+            <input type="text"
+              :value="(config.channels.whatsapp.allow_from || []).join(', ')"
+              @input="config.channels.whatsapp.allow_from = $event.target.value.split(',').map(s => s.trim()).filter(Boolean)"
+              placeholder="Comma-separated phone numbers" />
+          </label>
+        </fieldset>
+        <button type="submit">Save Channels</button>
+      </form>
+    </template>
+  </section>
+
+  <!-- ==================== Agent ==================== -->
+  <section x-show="tab==='agent'">
+    <template x-if="config">
+      <form @submit.prevent="saveSection('agents')">
+        <fieldset class="field-group">
+          <h4>Defaults</h4>
+          <label>
+            Workspace
+            <input type="text" x-model="config.agents.defaults.workspace" />
+          </label>
+          <label>
+            Model
+            <input type="text" x-model="config.agents.defaults.model" />
+          </label>
+          <label>
+            Max Tokens
+            <input type="number" x-model.number="config.agents.defaults.max_tokens" />
+          </label>
+          <label>
+            Temperature
+            <input type="number" step="0.1" min="0" max="2" x-model.number="config.agents.defaults.temperature" />
+          </label>
+          <label>
+            Max Tool Iterations
+            <input type="number" x-model.number="config.agents.defaults.max_tool_iterations" />
+          </label>
+        </fieldset>
+        <fieldset class="field-group">
+          <h4>Compaction</h4>
+          <label>
+            <input type="checkbox" role="switch" x-model="config.agents.defaults.compaction_enabled" />
+            Enabled
+          </label>
+          <label>
+            <input type="checkbox" role="switch" x-model="config.agents.defaults.compaction_silent" />
+            Silent
+          </label>
+          <label>
+            Keep Last N Messages
+            <input type="number" x-model.number="config.agents.defaults.compaction_keep_last" />
+          </label>
+          <label>
+            Trigger Ratio
+            <input type="number" step="0.05" min="0" max="1" x-model.number="config.agents.defaults.compaction_trigger_ratio" />
+          </label>
+          <label>
+            Chars Per Token
+            <input type="number" x-model.number="config.agents.defaults.token_chars_per_token" />
+          </label>
+        </fieldset>
+        <button type="submit">Save Agent</button>
+      </form>
+    </template>
+  </section>
+
+  <!-- ==================== Tools ==================== -->
+  <section x-show="tab==='tools'">
+    <template x-if="config">
+      <form @submit.prevent="saveSection('tools')">
+        <fieldset class="field-group">
+          <h4>Web Search</h4>
+          <label>
+            Brave API Key
+            <input type="text"
+              :value="config.tools.web.search.api_key"
+              @input="config.tools.web.search.api_key = $event.target.value"
+              :placeholder="isMasked(config.tools.web.search.api_key) ? '(configured - enter new value to change)' : 'Brave Search API key'" />
+          </label>
+          <label>
+            Max Results
+            <input type="number" min="1" max="20" x-model.number="config.tools.web.search.max_results" />
+          </label>
+        </fieldset>
+        <button type="submit">Save Tools</button>
+      </form>
+    </template>
+  </section>
+
+  <!-- Toast -->
+  <div class="toast" x-show="toastMsg" x-text="toastMsg" x-transition></div>
+
+</body>
+</html>
