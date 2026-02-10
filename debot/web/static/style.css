@@ -24,33 +24,36 @@ nav .version {
 /* Tab navigation */
 [role="tablist"] {
   display: flex;
-  gap: 0;
-  border-bottom: 2px solid var(--pico-muted-border-color);
+  gap: 0.35rem;
   margin-bottom: 1.5rem;
   padding: 0;
   list-style: none;
+  background: var(--pico-muted-border-color);
+  border-radius: 8px;
+  padding: 4px;
 }
 
 [role="tab"] {
-  padding: 0.5rem 1rem;
+  padding: 0.5rem 1.1rem;
   cursor: pointer;
   border: none;
-  background: none;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -2px;
+  background: transparent;
+  border-radius: 6px;
   font-weight: 500;
-  opacity: 0.6;
-  transition: opacity 0.15s, border-color 0.15s;
+  font-size: 0.9rem;
+  color: var(--pico-muted-color);
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
 }
 
 [role="tab"]:hover {
-  opacity: 0.85;
+  color: var(--pico-color);
+  background: color-mix(in srgb, var(--pico-background-color) 50%, transparent);
 }
 
 [role="tab"][aria-selected="true"] {
-  opacity: 1;
-  border-bottom-color: var(--debot-accent);
-  color: var(--debot-accent);
+  background: var(--debot-accent);
+  color: #fff;
+  font-weight: 600;
 }
 
 /* Status cards */
