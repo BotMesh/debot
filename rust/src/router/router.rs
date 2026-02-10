@@ -69,6 +69,13 @@ fn get_fallback_model(current_tier: &str) -> PyResult<String> {
     }
 }
 
+/// Returns the default model for a tier without availability filtering.
+#[pyfunction]
+fn get_tier_default_model(tier: &str) -> PyResult<String> {
+    let map = config::tier_model_map();
+    Ok(map.get(tier).unwrap_or(&"").to_string())
+}
+
 /// Returns a JSON array of alternative models for a tier, sorted by cost ascending.
 /// Each entry: {"model": "...", "cost": ...}
 /// Used for billing fallback: try same-tier alternatives before escalating.
@@ -98,6 +105,7 @@ pub fn pybindings(m: &pyo3::Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(route_text, m)?)?;
     m.add_function(wrap_pyfunction!(get_context_length, m)?)?;
     m.add_function(wrap_pyfunction!(get_fallback_model, m)?)?;
+    m.add_function(wrap_pyfunction!(get_tier_default_model, m)?)?;
     m.add_function(wrap_pyfunction!(get_tier_alternatives, m)?)?;
     m.add_function(wrap_pyfunction!(configure_providers, m)?)?;
     m.add_function(wrap_pyfunction!(reset_providers, m)?)?;

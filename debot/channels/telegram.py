@@ -102,8 +102,17 @@ class TelegramChannel(BaseChannel):
 
         self._running = True
 
-        # Build the application
-        self._app = Application.builder().token(self.config.token).build()
+        # Build the application with a larger connection pool to avoid shutdown timeouts
+        try:
+            from telegram.request import HTTPXRequest
+
+            request = HTTPXRequest(connection_pool_size=8, pool_timeout=30)
+            self._app = (
+                Application.builder().token(self.config.token).request(request).get_updates_request(request).build()
+            )
+        except Exception:
+            # Fallback to defaults if request customization isn't available
+            self._app = Application.builder().token(self.config.token).build()
 
         # Add message handler for text, photos, voice, documents
         self._app.add_handler(

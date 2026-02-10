@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import random
 import time
 from pathlib import Path
 
@@ -46,6 +47,7 @@ class AgentLoop:
         model: str | None = None,
         max_iterations: int = 20,
         brave_api_key: str | None = None,
+        multiagent_dispatch: bool = True,
     ):
         self.bus = bus
         self.provider = provider
@@ -66,9 +68,123 @@ class AgentLoop:
         )
 
         self._billing_cooldown_until: dict[str, float] = {}
+        self._multiagent_dispatch = multiagent_dispatch
 
         self._running = False
         self._register_default_tools()
+
+    def _resolve_orchestrator_model(self) -> str:
+        """Pick the best available model for planning/dispatch."""
+        try:
+            import debot_rust
+
+            # Prefer the default top-tier models, without availability filtering.
+            for tier in ("REASONING", "COMPLEX", "MEDIUM", "SIMPLE"):
+                default_model = debot_rust.get_tier_default_model(tier)
+                alts_json = debot_rust.get_tier_alternatives(tier)
+                alts = json.loads(alts_json) if alts_json else []
+                alt_models = [a.get("model") for a in alts if isinstance(a, dict) and a.get("model")]
+
+                # If default model is available, prefer it.
+                if default_model and default_model in alt_models and not self._is_in_billing_cooldown(default_model):
+                    return default_model
+
+                # Otherwise, pick the first available alternative.
+                for m in alt_models:
+                    if m and not self._is_in_billing_cooldown(m):
+                        return m
+        except Exception:
+            pass
+        return self.model
+
+    def _is_in_billing_cooldown(self, model_name: str) -> bool:
+        cooldown_until = self._billing_cooldown_until.get(model_name, 0.0)
+        return cooldown_until > time.time()
+
+    def _strip_json(self, text: str) -> str:
+        """Extract JSON from a response, tolerating code fences."""
+        if not text:
+            return text
+        s = text.strip()
+        if s.startswith("```"):
+            lines = s.splitlines()
+            if len(lines) >= 3:
+                return "\n".join(lines[1:-1]).strip()
+        return s
+
+    async def _plan_tasks(self, msg: InboundMessage, max_tokens: int) -> list[dict[str, str]]:
+        """Use the orchestrator model to split the message into tasks with difficulty tiers."""
+        system_prompt = (
+            "You are the dispatcher. Split the user's message into independent tasks and assign a difficulty tier.\n"
+            "Return strict JSON only (no markdown).\n"
+            'Schema: {"tasks":[{"label":"short label","task":"what to do","tier":"SIMPLE|MEDIUM|COMPLEX|REASONING"}]}\n'
+            "Rules: keep tasks independent; if there is only one task, return a single-item list."
+        )
+
+        plan_messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": msg.content},
+        ]
+
+        model = self._resolve_orchestrator_model()
+        logger.info("Dispatcher: using orchestrator model {}", model)
+        resp = await self.provider.chat(messages=plan_messages, model=model, max_tokens=max_tokens)
+        content = self._strip_json(resp.content or "")
+        try:
+            data = json.loads(content)
+            tasks = data.get("tasks") if isinstance(data, dict) else None
+            if isinstance(tasks, list):
+                normalized = []
+                for t in tasks:
+                    if not isinstance(t, dict):
+                        continue
+                    label = str(t.get("label") or "task").strip()
+                    task = str(t.get("task") or "").strip()
+                    tier = str(t.get("tier") or "SIMPLE").strip().upper()
+                    if task:
+                        normalized.append({"label": label, "task": task, "tier": tier})
+                if normalized:
+                    return normalized
+        except Exception:
+            pass
+
+        # Fallback: single task, default tier
+        return [{"label": "task", "task": msg.content, "tier": "SIMPLE"}]
+
+    async def _build_subtask_context(self, session, max_messages: int = 20, max_chars: int = 1200) -> str:
+        """Build a summarized context block for subagents from main session history."""
+        try:
+            history = session.get_history(max_messages=max_messages)
+        except Exception:
+            return ""
+        if not history:
+            return ""
+
+        # Summarize with orchestrator model (treat all history equally)
+        summary_prompt = (
+            "Summarize the context for a sub-task. "
+            "Include relevant facts, constraints, preferences, and decisions. "
+            "Return 3-6 bullet points in English. No markdown headers."
+        )
+        lines = []
+        for m in history:
+            role = m.get("role", "user")
+            content = (m.get("content") or "").replace("\n", " ").strip()
+            if content:
+                lines.append(f"{role}: {content}")
+        convo_text = "\n".join(lines)
+        messages = [
+            {"role": "system", "content": summary_prompt},
+            {"role": "user", "content": convo_text},
+        ]
+        model = self._resolve_orchestrator_model()
+        resp = await self.provider.chat(messages=messages, model=model)
+        summary = (resp.content or "").strip()
+        if not summary:
+            return ""
+        if len(summary) > max_chars:
+            summary = summary[: max_chars - 3] + "..."
+        return "Context summary:\n" + summary
 
     def _register_default_tools(self) -> None:
         """Register the default set of tools."""
@@ -237,6 +353,59 @@ class AgentLoop:
                 except Exception as e:
                     logger.warning(f"Auto-compaction failed: {e}")
 
+        # Multi-agent dispatcher (default: on for all channels)
+        if self._multiagent_dispatch:
+            tasks = await self._plan_tasks(msg, max_tokens)
+
+            # Dispatch each task to a subagent with tier-based model selection
+            dispatched = 0
+            context_block = await self._build_subtask_context(session)
+            for t in tasks:
+                tier = t.get("tier", "SIMPLE")
+                task_text = t.get("task", "")
+                label = t.get("label", "task")
+                if context_block:
+                    task_text = f"{context_block}\n\nTask:\n{task_text}"
+
+                model_for_task = self.model
+                try:
+                    import debot_rust
+
+                    alts_json = debot_rust.get_tier_alternatives(tier)
+                    alts = json.loads(alts_json) if alts_json else []
+                    if alts:
+                        candidates = [
+                            a.get("model")
+                            for a in alts
+                            if isinstance(a, dict)
+                            and a.get("model")
+                            and not self._is_in_billing_cooldown(a.get("model"))
+                        ]
+                        if candidates:
+                            model_for_task = random.choice(candidates)
+                except Exception:
+                    # Best-effort: fall back to router decision on the task text
+                    try:
+                        import debot_rust
+
+                        decision_json = debot_rust.route_text(task_text, max_tokens)
+                        dec = json.loads(decision_json) if decision_json else {}
+                        model_for_task = dec.get("model", model_for_task)
+                        tier = dec.get("tier", tier)
+                    except Exception:
+                        pass
+
+                spawn_tool = self.tools.get("spawn")
+                if isinstance(spawn_tool, SpawnTool):
+                    await spawn_tool.execute(task=task_text, label=f"[{tier}] {label}", model=model_for_task, tier=tier)
+                    dispatched += 1
+
+            ack = f"Dispatched {dispatched} task(s) to specialized models. Results will return separately."
+            session.add_message("user", msg.content)
+            session.add_message("assistant", ack)
+            self.sessions.save(session)
+            return OutboundMessage(channel=msg.channel, chat_id=msg.chat_id, content=ack)
+
         # Agent loop
         iteration = 0
         final_content = None
@@ -256,9 +425,7 @@ class AgentLoop:
                     )
                     return LLMResponse(content=None, finish_reason="insufficient_credits")
 
-                resp = await self.provider.chat(
-                    messages=messages, tools=self.tools.get_definitions(), model=model_name
-                )
+                resp = await self.provider.chat(messages=messages, tools=self.tools.get_definitions(), model=model_name)
                 logger.info("LLM response: finish_reason={} model={}", resp.finish_reason, model_name)
                 if resp.finish_reason == "insufficient_credits":
                     self._billing_cooldown_until[model_name] = now + 30 * 60
@@ -459,7 +626,20 @@ class AgentLoop:
                 break
 
         if final_content is None:
-            final_content = "I've completed processing but have no response to give."
+            # Fallback: force a final response without tool calls
+            try:
+                fallback_messages = list(messages)
+                fallback_messages.append(
+                    {
+                        "role": "system",
+                        "content": "Provide a concise final response to the user. Do not call any tools.",
+                    }
+                )
+                fallback_model = self._resolve_orchestrator_model()
+                response = await self.provider.chat(messages=fallback_messages, model=fallback_model)
+                final_content = response.content or "I've completed processing but have no response to give."
+            except Exception:
+                final_content = "I've completed processing but have no response to give."
 
         # Save to session
         session.add_message("user", msg.content)
@@ -510,8 +690,11 @@ class AgentLoop:
         while iteration < self.max_iterations:
             iteration += 1
 
-            response = await self.provider.chat(messages=messages, tools=self.tools.get_definitions(), model=self.model)
-            logger.info("LLM response: finish_reason={} model={}", response.finish_reason, self.model)
+            orchestrator_model = self._resolve_orchestrator_model()
+            response = await self.provider.chat(
+                messages=messages, tools=self.tools.get_definitions(), model=orchestrator_model
+            )
+            logger.info("LLM response: finish_reason={} model={}", response.finish_reason, orchestrator_model)
 
             if response.has_tool_calls:
                 tool_call_dicts = [

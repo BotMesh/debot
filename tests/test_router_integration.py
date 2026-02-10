@@ -36,7 +36,7 @@ async def test_router_selects_model(monkeypatch, tmp_path: Path):
 
     bus = MessageBus()
     provider = MockProvider()
-    agent = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="base-model")
+    agent = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="base-model", multiagent_dispatch=False)
 
     msg = InboundMessage(channel="cli", sender_id="user", chat_id="direct", content="hello")
 
@@ -53,7 +53,7 @@ async def test_router_fallback_on_error(monkeypatch, tmp_path: Path):
 
     bus = MessageBus()
     provider = MockProvider()
-    agent = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="base-model")
+    agent = AgentLoop(bus=bus, provider=provider, workspace=tmp_path, model="base-model", multiagent_dispatch=False)
 
     msg = InboundMessage(channel="cli", sender_id="user", chat_id="direct", content="hello")
 

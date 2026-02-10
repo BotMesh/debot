@@ -77,6 +77,8 @@ class LiteLLMProvider(LLMProvider):
 
         # Disable LiteLLM logging noise
         litellm.suppress_debug_info = True
+        # Drop unsupported params for models with strict parameter sets (e.g. OpenAI O-series)
+        litellm.drop_params = True
 
     async def chat(
         self,
@@ -129,6 +131,10 @@ class LiteLLMProvider(LLMProvider):
         # For Gemini, ensure gemini/ prefix if not already present (skip for OpenRouter)
         if "gemini" in model.lower() and not model.startswith(("gemini/", "openrouter/")):
             model = f"gemini/{model}"
+
+        # OpenAI O-series only supports temperature=1; normalize to avoid API errors.
+        if "/o3" in model or model.startswith("o3"):
+            temperature = 1.0
 
         # Check for per-model custom endpoint overrides (e.g. NVIDIA, Moonshot API)
         _custom_api_key = None
