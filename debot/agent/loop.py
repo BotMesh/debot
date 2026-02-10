@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import time
 from pathlib import Path
 
 from loguru import logger
@@ -21,7 +22,7 @@ from debot.agent.tools import (
     WriteFileTool,
 )
 from debot.bus import InboundMessage, MessageBus, OutboundMessage
-from debot.providers.base import LLMProvider
+from debot.providers.base import LLMProvider, LLMResponse
 from debot.session._manager_py import SessionManager
 
 
@@ -63,6 +64,8 @@ class AgentLoop:
             model=self.model,
             brave_api_key=brave_api_key,
         )
+
+        self._billing_cooldown_until: dict[str, float] = {}
 
         self._running = False
         self._register_default_tools()
@@ -241,6 +244,30 @@ class AgentLoop:
         while iteration < self.max_iterations:
             iteration += 1
 
+            async def _call_with_insufficient_retry(model_name: str):
+                now = time.time()
+                cooldown_until = self._billing_cooldown_until.get(model_name, 0.0)
+                if cooldown_until > now:
+                    remaining = int(cooldown_until - now)
+                    logger.warning(
+                        "Billing: model {} in cooldown for {}s, skipping call.",
+                        model_name,
+                        remaining,
+                    )
+                    return LLMResponse(content=None, finish_reason="insufficient_credits")
+
+                resp = await self.provider.chat(
+                    messages=messages, tools=self.tools.get_definitions(), model=model_name
+                )
+                logger.info("LLM response: finish_reason={} model={}", resp.finish_reason, model_name)
+                if resp.finish_reason == "insufficient_credits":
+                    self._billing_cooldown_until[model_name] = now + 30 * 60
+                    logger.warning(
+                        "Billing: insufficient credits for {}. Cooling down for 30 minutes.",
+                        model_name,
+                    )
+                return resp
+
             # Call Rust router (if available) to choose model, then call LLM
             chosen_model = self.model
             current_tier = None
@@ -303,10 +330,7 @@ class AgentLoop:
                 logger.info("Routing: using model {}", chosen_model)
 
             # Call LLM with escalation on failure
-            response = await self.provider.chat(
-                messages=messages, tools=self.tools.get_definitions(), model=chosen_model
-            )
-            logger.info("LLM response: finish_reason={} model={}", response.finish_reason, chosen_model)
+            response = await _call_with_insufficient_retry(chosen_model)
 
             # Auto-reroute on failure
             _fail_reasons = ("error", "context_length_exceeded", "insufficient_credits")
@@ -338,12 +362,7 @@ class AgentLoop:
                         except Exception:
                             pass
                         chosen_model = alt["model"]
-                        response = await self.provider.chat(
-                            messages=messages,
-                            tools=self.tools.get_definitions(),
-                            model=chosen_model,
-                        )
-                        logger.info("LLM response: finish_reason={} model={}", response.finish_reason, chosen_model)
+                        response = await _call_with_insufficient_retry(chosen_model)
                         if response.finish_reason not in _fail_reasons:
                             rerouted = True
                             break
@@ -371,12 +390,7 @@ class AgentLoop:
                             chosen_model = fb["model"]
                             current_tier = fb["tier"]
                             esc_tier = fb["tier"]
-                            response = await self.provider.chat(
-                                messages=messages,
-                                tools=self.tools.get_definitions(),
-                                model=chosen_model,
-                            )
-                            logger.info("LLM response: finish_reason={} model={}", response.finish_reason, chosen_model)
+                            response = await _call_with_insufficient_retry(chosen_model)
                             if response.finish_reason not in _fail_reasons:
                                 break
                 else:
@@ -400,12 +414,7 @@ class AgentLoop:
                             pass
                         chosen_model = fb["model"]
                         current_tier = fb["tier"]
-                        response = await self.provider.chat(
-                            messages=messages,
-                            tools=self.tools.get_definitions(),
-                            model=chosen_model,
-                        )
-                        logger.info("LLM response: finish_reason={} model={}", response.finish_reason, chosen_model)
+                        response = await _call_with_insufficient_retry(chosen_model)
                         if response.finish_reason not in _fail_reasons:
                             break
 
