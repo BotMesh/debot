@@ -199,46 +199,35 @@ debot config compaction-model "anthropic/claude-opus-4-5" --keep-last 40
 
 ## 🚀 Intelligent Model Router
 
-Debot includes a **built-in intelligent router** (powered by Rust) that automatically selects the best LLM model based on task complexity. This saves costs by routing simple queries to cheaper models while reserving powerful models for complex reasoning tasks.
+Debot includes a **built-in intelligent router** (powered by Rust) that automatically selects an LLM based on task complexity. This saves cost by sending simple prompts to cheaper models and reserving powerful models for harder tasks.
 
 **How it works:**
-- Analyzes incoming prompts across 10 dimensions: reasoning difficulty, code complexity, multi-step reasoning, token count, creativity, technical depth, and more.
-- Scores each dimension using heuristic patterns and keyword detection.
-- Maps the overall complexity score to a tier: `SIMPLE` → `MEDIUM` → `COMPLEX` → `REASONING`.
-- Routes to the configured model for that tier (customizable).
+- Analyzes incoming prompts across multiple dimensions (reasoning difficulty, code complexity, multi‑step reasoning, token count, creativity, technical depth, etc.).
+- Scores each dimension via heuristics and keyword patterns.
+- Maps the overall score to a tier: `SIMPLE` → `MEDIUM` → `COMPLEX` → `REASONING`.
+- Selects a model for that tier (configurable in `rust/src/router/config.rs`).
 
-**Default tier-to-model mapping:**
-| Tier | Model | Cost (per 1M tokens) |
-|------|-------|------|
-| `SIMPLE` | `openai/gpt-3.5-turbo` | $1.50 |
-| `MEDIUM` | `openai/gpt-4o-mini` | $0.60 |
-| `COMPLEX` | `anthropic/claude-opus-4-5` | $25.00 |
-| `REASONING` | `openai/o3` | $8.00 |
+**Example tier mapping** (actual mapping is defined in Rust config):
+| Tier | Example Model |
+|------|---------------|
+| `SIMPLE` | `openai/gpt-3.5-turbo` |
+| `MEDIUM` | `openai/gpt-4o-mini` |
+| `COMPLEX` | `anthropic/claude-opus-4-5` |
+| `REASONING` | `openai/o3` |
 
-The router runs automatically — no configuration needed. You can customize the tier-to-model mapping by editing the Rust router config (see `rust/src/router/config.rs`).
+The router runs automatically — no configuration needed unless you want custom tier mapping.
 
 **Automatic Fallback & Escalation:**
 
-When a model fails, Debot doesn't just give up — it automatically retries with alternative models:
+When a model fails, Debot automatically retries with alternatives:
 
-1. **Pre-check**: Before calling the API, estimates token count and compares against the model's context window. If the prompt is too large, skips straight to a bigger model.
-2. **Billing fallback (402 / insufficient credits)**: Tries same-tier alternatives from cheaper providers first (e.g. Groq free tier → DeepSeek → OpenAI), then escalates to the next tier.
-3. **Context window exceeded**: Escalates to the next tier with a larger context window.
-4. **Cross-provider routing**: If your OpenRouter credits run out, Debot automatically routes to providers where you have direct API keys (Anthropic, Groq, OpenAI, etc.).
+1. **Pre‑check**: Estimates token count and compares against model context. If too large, it escalates to a larger‑context model.
+2. **Billing fallback (`insufficient_credits`)**: Tries same‑tier alternatives (ordered by cost) before escalating to the next tier.
+3. **Context / other errors**: Escalates to a more capable tier.
+4. **Cross‑provider routing**: If OpenRouter credits run out, Debot can route to providers where you’ve configured direct API keys.
 
-> Configure multiple provider keys in `~/.debot/config.json` to enable cross-provider fallback — see [Configuration](#%EF%B8%8F-configuration).
-
-**Cost savings benchmark:**
-
-We ran 33 representative prompts (greetings, code tasks, architecture design, formal proofs) through the router and simulated a typical daily workload of 70 queries (see `experiments/router_cost_savings.py`):
-
-| Scenario | Daily Cost | Savings |
-|----------|-----------|---------|
-| Baseline (always `claude-opus-4-5`) | $0.4285 | — |
-| Auto router (current, 58% accuracy) | $0.1249 | **70.8%** |
-| Ideal router (100% accuracy) | $0.1990 | 53.6% |
-
-> The router distributes traffic across all 4 tiers: ~58% SIMPLE, ~21% MEDIUM, ~15% COMPLEX, ~6% REASONING. Simple queries ($1.50/M) and medium tasks ($0.60/M) avoid the $25.00/M baseline cost, cutting the bill by ~71%.
+> Configure multiple provider keys in `~/.debot/config.json` to enable cross‑provider fallback — see [Configuration](#%EF%B8%8F-configuration).
+> If OpenRouter is configured, it is used as the primary API base by default, so `insufficient_credits` often indicates OpenRouter balance issues.
 
 **Router CLI tools:**
 

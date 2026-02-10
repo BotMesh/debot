@@ -32,6 +32,21 @@ fn get_context_length(model: &str) -> PyResult<u64> {
     Ok(*ctx_map.get(model).unwrap_or(&0))
 }
 
+/// Configure which providers are available (have API keys).
+/// Models from unavailable providers will be filtered out of routing decisions.
+#[pyfunction]
+fn configure_providers(providers: Vec<String>) -> PyResult<()> {
+    config::set_available_providers(providers);
+    Ok(())
+}
+
+/// Reset provider filtering (all models available). For testing.
+#[pyfunction]
+fn reset_providers() -> PyResult<()> {
+    config::reset_available_providers();
+    Ok(())
+}
+
 /// Returns a JSON object with the next tier's model for escalation, or empty string if at top.
 /// JSON: {"model": "...", "tier": "...", "cost": ...}
 #[pyfunction]
@@ -39,7 +54,7 @@ fn get_fallback_model(current_tier: &str) -> PyResult<String> {
     let next = config::next_tier(current_tier);
     match next {
         Some(next_tier) => {
-            let map = config::tier_model_map();
+            let map = config::available_tier_model_map();
             let model = map.get(next_tier).unwrap_or(&"openai/gpt-4o-mini");
             let pricing = catalog::default_pricing();
             let cost = *pricing.get(model).unwrap_or(&1.0);
@@ -62,6 +77,7 @@ fn get_tier_alternatives(tier: &str) -> PyResult<String> {
     let alts = config::tier_alternatives();
     let pricing = catalog::default_pricing();
     let models = alts.get(tier).cloned().unwrap_or_default();
+    let models = config::filter_available_models(models);
     let mut entries: Vec<serde_json::Value> = models
         .iter()
         .map(|&model| {
@@ -83,6 +99,8 @@ pub fn pybindings(m: &pyo3::Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(get_context_length, m)?)?;
     m.add_function(wrap_pyfunction!(get_fallback_model, m)?)?;
     m.add_function(wrap_pyfunction!(get_tier_alternatives, m)?)?;
+    m.add_function(wrap_pyfunction!(configure_providers, m)?)?;
+    m.add_function(wrap_pyfunction!(reset_providers, m)?)?;
     m.add_function(wrap_pyfunction!(metrics::get_router_metrics, m)?)?;
     m.add_function(wrap_pyfunction!(metrics::reset_router_metrics, m)?)?;
     m.add_function(wrap_pyfunction!(metrics::get_router_metrics_count, m)?)?;

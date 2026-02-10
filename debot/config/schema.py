@@ -76,9 +76,12 @@ class ProvidersConfig(BaseModel):
     openai: ProviderConfig = Field(default_factory=ProviderConfig)
     openrouter: ProviderConfig = Field(default_factory=ProviderConfig)
     groq: ProviderConfig = Field(default_factory=ProviderConfig)
+    deepseek: ProviderConfig = Field(default_factory=ProviderConfig)
     zhipu: ProviderConfig = Field(default_factory=ProviderConfig)
     vllm: ProviderConfig = Field(default_factory=ProviderConfig)
     gemini: ProviderConfig = Field(default_factory=ProviderConfig)
+    nvidia: ProviderConfig = Field(default_factory=ProviderConfig)
+    moonshotai: ProviderConfig = Field(default_factory=ProviderConfig)
 
 
 class GatewayConfig(BaseModel):
@@ -147,8 +150,14 @@ class Config(BaseSettings):
             keys["gemini"] = self.providers.gemini.api_key
         if self.providers.groq.api_key:
             keys["groq"] = self.providers.groq.api_key
+        if self.providers.deepseek.api_key:
+            keys["deepseek"] = self.providers.deepseek.api_key
         if self.providers.zhipu.api_key:
             keys["zhipu"] = self.providers.zhipu.api_key
+        if self.providers.nvidia.api_key:
+            keys["nvidia"] = self.providers.nvidia.api_key
+        if self.providers.moonshotai.api_key:
+            keys["moonshotai"] = self.providers.moonshotai.api_key
         return keys
 
     def get_api_base(self) -> str | None:

@@ -139,6 +139,17 @@ class AgentLoop:
             return await self._process_system_message(msg)
 
         logger.info(f"Processing message from {msg.channel}:{msg.sender_id}")
+        logger.info("Router trace active for session {}", msg.session_key)
+        logger.info(
+            "Inbound: session={} channel={} chat_id={} sender_id={} content_len={} media_count={} metadata_keys={}",
+            msg.session_key,
+            msg.channel,
+            msg.chat_id,
+            msg.sender_id,
+            len(msg.content or ""),
+            len(msg.media or []),
+            list(msg.metadata.keys()) if msg.metadata else [],
+        )
 
         # Get or create session
         session = self.sessions.get_or_create(msg.session_key)
@@ -191,9 +202,19 @@ class AgentLoop:
             compaction_silent = True
             chars_per_token = 4
 
+        # Naive token estimate: 1 token ~= chars_per_token characters
+        estimated_tokens = sum(len(str(m.get("content", ""))) for m in messages) // max(1, chars_per_token)
+        logger.info(
+            "Context: estimated_tokens={} max_tokens={} trigger_ratio={} keep_last={} compaction_enabled={} compaction_silent={}",
+            estimated_tokens,
+            max_tokens,
+            compaction_trigger_ratio,
+            compaction_keep_last,
+            compaction_enabled,
+            compaction_silent,
+        )
+
         if compaction_enabled:
-            # Naive token estimate: 1 token ~= chars_per_token characters
-            estimated_tokens = sum(len(str(m.get("content", ""))) for m in messages) // max(1, chars_per_token)
             if estimated_tokens >= int(max_tokens * compaction_trigger_ratio):
                 if not compaction_silent:
                     logger.info(f"Context near limit ({estimated_tokens}/{max_tokens} tokens). Running compaction.")
@@ -230,6 +251,7 @@ class AgentLoop:
                 _debot_rust = _debot_rust_mod
                 decision_json = _debot_rust.route_text(msg.content, max_tokens)
                 if decision_json:
+                    logger.info("Router decision raw: {}", decision_json)
                     try:
                         dec = json.loads(decision_json)
                         chosen_model = dec.get("model", self.model)
@@ -243,9 +265,13 @@ class AgentLoop:
                         )
                     except Exception:
                         chosen_model = self.model
-            except Exception:
+                        logger.warning("Router: invalid decision payload, using default model {}", self.model)
+                else:
+                    logger.info("Router: no decision returned, using default model {}", self.model)
+            except Exception as e:
                 # Router not available or failed; fall back to default model
                 chosen_model = self.model
+                logger.info("Router: unavailable ({}), using default model {}", e, self.model)
 
             # Pre-check: escalate if estimated tokens exceed model context window
             if _debot_rust and current_tier:
@@ -271,10 +297,16 @@ class AgentLoop:
                 except Exception:
                     pass  # Pre-check is best-effort
 
+            if current_tier:
+                logger.info("Routing: using model {} (tier {})", chosen_model, current_tier)
+            else:
+                logger.info("Routing: using model {}", chosen_model)
+
             # Call LLM with escalation on failure
             response = await self.provider.chat(
                 messages=messages, tools=self.tools.get_definitions(), model=chosen_model
             )
+            logger.info("LLM response: finish_reason={} model={}", response.finish_reason, chosen_model)
 
             # Auto-reroute on failure
             _fail_reasons = ("error", "context_length_exceeded", "insufficient_credits")
@@ -311,6 +343,7 @@ class AgentLoop:
                             tools=self.tools.get_definitions(),
                             model=chosen_model,
                         )
+                        logger.info("LLM response: finish_reason={} model={}", response.finish_reason, chosen_model)
                         if response.finish_reason not in _fail_reasons:
                             rerouted = True
                             break
@@ -343,6 +376,7 @@ class AgentLoop:
                                 tools=self.tools.get_definitions(),
                                 model=chosen_model,
                             )
+                            logger.info("LLM response: finish_reason={} model={}", response.finish_reason, chosen_model)
                             if response.finish_reason not in _fail_reasons:
                                 break
                 else:
@@ -371,6 +405,7 @@ class AgentLoop:
                             tools=self.tools.get_definitions(),
                             model=chosen_model,
                         )
+                        logger.info("LLM response: finish_reason={} model={}", response.finish_reason, chosen_model)
                         if response.finish_reason not in _fail_reasons:
                             break
 
@@ -467,6 +502,7 @@ class AgentLoop:
             iteration += 1
 
             response = await self.provider.chat(messages=messages, tools=self.tools.get_definitions(), model=self.model)
+            logger.info("LLM response: finish_reason={} model={}", response.finish_reason, self.model)
 
             if response.has_tool_calls:
                 tool_call_dicts = [

@@ -3,6 +3,8 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
+from loguru import logger
+
 from debot.bus import InboundMessage, MessageBus, OutboundMessage
 
 
@@ -100,7 +102,17 @@ class BaseChannel(ABC):
             media: Optional list of media URLs.
             metadata: Optional channel-specific metadata.
         """
-        if not self.is_allowed(sender_id):
+        allowed = self.is_allowed(sender_id)
+        logger.info(
+            "Channel inbound: channel={} sender_id={} chat_id={} content_len={} media_count={} allowed={}",
+            self.name,
+            sender_id,
+            chat_id,
+            len(content or ""),
+            len(media or []),
+            allowed,
+        )
+        if not allowed:
             return
 
         msg = InboundMessage(

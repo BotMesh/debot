@@ -23,9 +23,12 @@ class LiteLLMProvider(LLMProvider):
         api_base: str | None = None,
         default_model: str = "anthropic/claude-opus-4-5",
         all_api_keys: dict[str, str] | None = None,
+        custom_models: dict[str, tuple[str, str, bool]] | None = None,
     ):
         super().__init__(api_key, api_base)
         self.default_model = default_model
+        # Per-model overrides: model_prefix -> (api_key, api_base)
+        self.custom_models = custom_models or {}
 
         # Detect OpenRouter by api_key prefix or explicit api_base
         self.is_openrouter = (api_key and api_key.startswith("sk-or-")) or (api_base and "openrouter" in api_base)
@@ -41,6 +44,8 @@ class LiteLLMProvider(LLMProvider):
             "openai": "OPENAI_API_KEY",
             "gemini": "GEMINI_API_KEY",
             "groq": "GROQ_API_KEY",
+            "deepseek": "DEEPSEEK_API_KEY",
+            "moonshotai": "MOONSHOT_API_KEY",
             "zhipu": "ZHIPUAI_API_KEY",
         }
         if all_api_keys:
@@ -125,6 +130,20 @@ class LiteLLMProvider(LLMProvider):
         if "gemini" in model.lower() and not model.startswith(("gemini/", "openrouter/")):
             model = f"gemini/{model}"
 
+        # Check for per-model custom endpoint overrides (e.g. NVIDIA, Moonshot API)
+        _custom_api_key = None
+        _custom_api_base = None
+        for prefix, (ckey, cbase, strip_prefix) in self.custom_models.items():
+            if model.startswith(prefix):
+                _custom_api_key = ckey
+                _custom_api_base = cbase
+                # Use openai/ prefix for OpenAI-compatible endpoints
+                # strip_prefix=True for APIs that use bare model names (e.g. Moonshot: "kimi-k2.5")
+                # strip_prefix=False for APIs that use prefixed names (e.g. NVIDIA: "moonshotai/kimi-k2.5")
+                model_name = model[len(prefix) :] if strip_prefix else model
+                model = f"openai/{model_name}"
+                break
+
         kwargs: dict[str, Any] = {
             "model": model,
             "messages": messages,
@@ -132,10 +151,15 @@ class LiteLLMProvider(LLMProvider):
             "temperature": temperature,
         }
 
+        if _custom_api_base:
+            kwargs["api_base"] = _custom_api_base
+        if _custom_api_key:
+            kwargs["api_key"] = _custom_api_key
+
         # Pass api_base for custom endpoints — but NOT for direct-provider calls
         # (cross-provider fallback should hit the native API, not OpenRouter).
         _is_direct = not model.startswith("openrouter/") and not model.startswith("hosted_vllm/")
-        if self.api_base and not _is_direct:
+        if self.api_base and not _is_direct and not _custom_api_base:
             kwargs["api_base"] = self.api_base
 
         if tools:

@@ -7,11 +7,12 @@ PYO3_USE_ABI3_FORWARD_COMPATIBILITY ?= 1
 
 .PHONY: lint lint-check format format-rust test install build deps-build
 
-lint:
+lint: deps-build
 	$(RUFF) format debot/
 	cargo fmt --manifest-path rust/Cargo.toml
 
 deps-build:
+	$(PIP) install ruff
 	$(PIP) install maturin
 
 build: deps-build

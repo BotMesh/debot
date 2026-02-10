@@ -67,26 +67,28 @@ fn get_catalog() -> &'static Catalog {
         }
 
         // Official provider pricing overrides (USD per 1M output tokens).
-        let price_overrides: [(&'static str, f64); 6] = [
+        let price_overrides: [(&'static str, f64); 7] = [
             ("openai/gpt-3.5-turbo", 1.50),
             ("openai/gpt-4o-mini", 0.60),
             ("openai/o3", 8.00),
             ("anthropic/claude-opus-4-5", 25.00),
             ("deepseek/deepseek-chat", 0.42),
             ("minimax/minimax-m2", 1.20),
+            ("moonshotai/kimi-k2.5", 1.40),
         ];
         for (model, price) in price_overrides {
             pricing.insert(model, price);
         }
 
         // Context length overrides for core tier models (guaranteed fallback).
-        let ctx_overrides: [(&'static str, u64); 6] = [
+        let ctx_overrides: [(&'static str, u64); 7] = [
             ("openai/gpt-3.5-turbo", 16_384),
             ("openai/gpt-4o-mini", 128_000),
             ("anthropic/claude-opus-4-5", 200_000),
             ("openai/o3", 200_000),
             ("deepseek/deepseek-chat", 128_000),
             ("minimax/minimax-m2", 1_000_000),
+            ("moonshotai/kimi-k2.5", 131_072),
         ];
         for (model, ctx) in ctx_overrides {
             context_lengths.insert(model, ctx);

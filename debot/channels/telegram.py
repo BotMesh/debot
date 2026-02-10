@@ -115,23 +115,27 @@ class TelegramChannel(BaseChannel):
 
         logger.info("Starting Telegram bot (polling mode)...")
 
-        # Initialize and start polling
-        await self._app.initialize()
-        await self._app.start()
+        try:
+            # Initialize and start polling
+            await self._app.initialize()
+            await self._app.start()
 
-        # Get bot info
-        bot_info = await self._app.bot.get_me()
-        logger.info(f"Telegram bot @{bot_info.username} connected")
+            # Get bot info
+            bot_info = await self._app.bot.get_me()
+            logger.info(f"Telegram bot @{bot_info.username} connected")
 
-        # Start polling (this runs until stopped)
-        await self._app.updater.start_polling(
-            allowed_updates=["message"],
-            drop_pending_updates=True,  # Ignore old messages on startup
-        )
+            # Start polling (this runs until stopped)
+            await self._app.updater.start_polling(
+                allowed_updates=["message"],
+                drop_pending_updates=True,  # Ignore old messages on startup
+            )
 
-        # Keep running until stopped
-        while self._running:
-            await asyncio.sleep(1)
+            # Keep running until stopped
+            while self._running:
+                await asyncio.sleep(1)
+        except Exception as e:
+            logger.error(f"Telegram bot failed to start: {e}")
+            self._running = False
 
     async def stop(self) -> None:
         """Stop the Telegram bot."""
@@ -214,6 +218,18 @@ class TelegramChannel(BaseChannel):
         message = update.message
         user = update.effective_user
         chat_id = message.chat_id
+        logger.info(
+            "Telegram inbound: chat_id={} user_id={} message_id={} text_len={} caption_len={} has_photo={} has_voice={} has_audio={} has_document={}",
+            chat_id,
+            user.id,
+            message.message_id,
+            len(message.text or ""),
+            len(message.caption or ""),
+            bool(message.photo),
+            bool(message.voice),
+            bool(message.audio),
+            bool(message.document),
+        )
 
         # Use stable numeric ID, but keep username for allowlist compatibility
         sender_id = str(user.id)
