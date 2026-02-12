@@ -73,13 +73,17 @@ class AgentLoop:
         self._running = False
         self._register_default_tools()
 
-    def _resolve_orchestrator_model(self) -> str:
-        """Pick the best available model for planning/dispatch."""
+    def _resolve_orchestrator_model(self, preferred_tier: str = "COMPLEX") -> str:
+        """Pick an available model for planning/dispatch."""
         try:
             import debot_rust
 
             # Prefer the default top-tier models, without availability filtering.
-            for tier in ("REASONING", "COMPLEX", "MEDIUM", "SIMPLE"):
+            order = ("REASONING", "COMPLEX", "MEDIUM", "SIMPLE")
+            if preferred_tier in order:
+                start = order.index(preferred_tier)
+                order = order[start:] + order[:start]
+            for tier in order:
                 default_model = debot_rust.get_tier_default_model(tier)
                 alts_json = debot_rust.get_tier_alternatives(tier)
                 alts = json.loads(alts_json) if alts_json else []
@@ -126,7 +130,7 @@ class AgentLoop:
             {"role": "user", "content": msg.content},
         ]
 
-        model = self._resolve_orchestrator_model()
+        model = self._resolve_orchestrator_model(preferred_tier="MEDIUM")
         logger.info("Dispatcher: using orchestrator model {}", model)
         resp = await self.provider.chat(messages=plan_messages, model=model, max_tokens=max_tokens)
         content = self._strip_json(resp.content or "")
@@ -177,7 +181,7 @@ class AgentLoop:
             {"role": "system", "content": summary_prompt},
             {"role": "user", "content": convo_text},
         ]
-        model = self._resolve_orchestrator_model()
+        model = self._resolve_orchestrator_model(preferred_tier="MEDIUM")
         resp = await self.provider.chat(messages=messages, model=model)
         summary = (resp.content or "").strip()
         if not summary:
@@ -270,6 +274,8 @@ class AgentLoop:
             list(msg.metadata.keys()) if msg.metadata else [],
         )
 
+        t0 = time.perf_counter()
+
         # Get or create session
         session = self.sessions.get_or_create(msg.session_key)
 
@@ -280,7 +286,11 @@ class AgentLoop:
 
         spawn_tool = self.tools.get("spawn")
         if isinstance(spawn_tool, SpawnTool):
-            spawn_tool.set_context(msg.channel, msg.chat_id)
+            spawn_tool.set_context(
+                msg.channel,
+                msg.chat_id,
+                msg.metadata.get("message_thread_id") if msg.metadata else None,
+            )
 
         # Build initial messages (use get_history for LLM-formatted messages)
         messages = self.context.build_messages(
@@ -288,6 +298,7 @@ class AgentLoop:
             current_message=msg.content,
             media=msg.media if msg.media else None,
         )
+        t_build = time.perf_counter()
 
         # Auto-compaction: estimate prompt size and compact older history if needed.
         try:
@@ -352,14 +363,32 @@ class AgentLoop:
                             logger.info(f"Auto-compaction completed: {compacted} messages compacted.")
                 except Exception as e:
                     logger.warning(f"Auto-compaction failed: {e}")
+        t_compact = time.perf_counter()
 
         # Multi-agent dispatcher (default: on for all channels)
         if self._multiagent_dispatch:
-            tasks = await self._plan_tasks(msg, max_tokens)
+            # Heuristic gate: only dispatch if message looks multi-task
+            is_multi = False
+            text = (msg.content or "").strip()
+            if text.count("\n") >= 2:
+                is_multi = True
+            if any(tok in text for tok in ("1.", "2.", "3.", "•", "-", "1)", "2)")):
+                is_multi = True
+            if any(kw in text for kw in ("and ", "also ", "plus ", "besides ", "additionally ", "同时", "另外", "以及")):
+                is_multi = True
+
+            t_plan_start = time.perf_counter()
+            tasks = (
+                await self._plan_tasks(msg, max_tokens)
+                if is_multi
+                else [{"label": "task", "task": msg.content, "tier": "SIMPLE"}]
+            )
+            t_plan = time.perf_counter()
 
             # Dispatch each task to a subagent with tier-based model selection
             dispatched = 0
-            context_block = await self._build_subtask_context(session)
+            context_block = await self._build_subtask_context(session) if is_multi else ""
+            t_summary = time.perf_counter()
             for t in tasks:
                 tier = t.get("tier", "SIMPLE")
                 task_text = t.get("task", "")
@@ -399,16 +428,34 @@ class AgentLoop:
                 if isinstance(spawn_tool, SpawnTool):
                     await spawn_tool.execute(task=task_text, label=f"[{tier}] {label}", model=model_for_task, tier=tier)
                     dispatched += 1
+            t_dispatch = time.perf_counter()
 
             ack = f"Dispatched {dispatched} task(s) to specialized models. Results will return separately."
             session.add_message("user", msg.content)
             session.add_message("assistant", ack)
             self.sessions.save(session)
-            return OutboundMessage(channel=msg.channel, chat_id=msg.chat_id, content=ack)
+            logger.info(
+                "Timing: total={:.3f}s build={:.3f}s compact={:.3f}s plan={:.3f}s summary={:.3f}s dispatch={:.3f}s",
+                t_dispatch - t0,
+                t_build - t0,
+                t_compact - t_build,
+                t_plan - t_plan_start,
+                t_summary - t_plan,
+                t_dispatch - t_summary,
+            )
+            return OutboundMessage(
+                channel=msg.channel,
+                chat_id=msg.chat_id,
+                content=ack,
+                metadata={"message_thread_id": msg.metadata.get("message_thread_id")}
+                if msg.metadata
+                else {},
+            )
 
         # Agent loop
         iteration = 0
         final_content = None
+        t_router_start = time.perf_counter()
 
         while iteration < self.max_iterations:
             iteration += 1
@@ -466,6 +513,7 @@ class AgentLoop:
                 # Router not available or failed; fall back to default model
                 chosen_model = self.model
                 logger.info("Router: unavailable ({}), using default model {}", e, self.model)
+            t_router = time.perf_counter()
 
             # Pre-check: escalate if estimated tokens exceed model context window
             if _debot_rust and current_tier:
@@ -498,6 +546,7 @@ class AgentLoop:
 
             # Call LLM with escalation on failure
             response = await _call_with_insufficient_retry(chosen_model)
+            t_llm = time.perf_counter()
 
             # Auto-reroute on failure
             _fail_reasons = ("error", "context_length_exceeded", "insufficient_credits")
@@ -645,8 +694,24 @@ class AgentLoop:
         session.add_message("user", msg.content)
         session.add_message("assistant", final_content)
         self.sessions.save(session)
+        t_end = time.perf_counter()
+        logger.info(
+            "Timing: total={:.3f}s build={:.3f}s compact={:.3f}s router={:.3f}s llm_first={:.3f}s",
+            t_end - t0,
+            t_build - t0,
+            t_compact - t_build,
+            t_router - t_router_start,
+            t_llm - t_router,
+        )
 
-        return OutboundMessage(channel=msg.channel, chat_id=msg.chat_id, content=final_content)
+        return OutboundMessage(
+            channel=msg.channel,
+            chat_id=msg.chat_id,
+            content=final_content,
+            metadata={"message_thread_id": msg.metadata.get("message_thread_id")}
+            if msg.metadata
+            else {},
+        )
 
     async def _process_system_message(self, msg: InboundMessage) -> OutboundMessage | None:
         """
@@ -678,7 +743,11 @@ class AgentLoop:
 
         spawn_tool = self.tools.get("spawn")
         if isinstance(spawn_tool, SpawnTool):
-            spawn_tool.set_context(origin_channel, origin_chat_id)
+            spawn_tool.set_context(
+                origin_channel,
+                origin_chat_id,
+                msg.metadata.get("message_thread_id") if msg.metadata else None,
+            )
 
         # Build messages with the announce content
         messages = self.context.build_messages(history=session.get_history(), current_message=msg.content)
@@ -724,7 +793,14 @@ class AgentLoop:
         session.add_message("assistant", final_content)
         self.sessions.save(session)
 
-        return OutboundMessage(channel=origin_channel, chat_id=origin_chat_id, content=final_content)
+        return OutboundMessage(
+            channel=origin_channel,
+            chat_id=origin_chat_id,
+            content=final_content,
+            metadata={"message_thread_id": msg.metadata.get("message_thread_id")}
+            if msg.metadata
+            else {},
+        )
 
     async def process_direct(self, content: str, session_key: str = "cli:direct") -> str:
         """

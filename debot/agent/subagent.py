@@ -51,6 +51,7 @@ class SubagentManager:
         label: str | None = None,
         model: str | None = None,
         tier: str | None = None,
+        origin_thread_id: int | None = None,
         origin_channel: str = "cli",
         origin_chat_id: str = "direct",
     ) -> str:
@@ -72,6 +73,7 @@ class SubagentManager:
         origin = {
             "channel": origin_channel,
             "chat_id": origin_chat_id,
+            "thread_id": origin_thread_id,
         }
 
         # Create background task
@@ -89,7 +91,7 @@ class SubagentManager:
         task_id: str,
         task: str,
         label: str,
-        origin: dict[str, str],
+        origin: dict[str, Any],
         model: str | None,
         tier: str | None,
     ) -> None:
@@ -182,7 +184,7 @@ class SubagentManager:
         label: str,
         task: str,
         result: str,
-        origin: dict[str, str],
+        origin: dict[str, Any],
         status: str,
         tier: str | None,
     ) -> None:
@@ -206,6 +208,7 @@ Reply to the user for this task only. Do not mention other tasks, "subagent", or
             sender_id="subagent",
             chat_id=f"{origin['channel']}:{origin['chat_id']}",
             content=announce_content,
+            metadata={"message_thread_id": origin.get("thread_id")},
         )
 
         await self.bus.publish_inbound(msg)

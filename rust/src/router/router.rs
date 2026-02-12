@@ -76,6 +76,13 @@ fn get_tier_default_model(tier: &str) -> PyResult<String> {
     Ok(map.get(tier).unwrap_or(&"").to_string())
 }
 
+/// Returns the default price per 1M tokens for a model, or 1.0 if unknown.
+#[pyfunction]
+fn get_model_cost(model: &str) -> PyResult<f64> {
+    let pricing = catalog::default_pricing();
+    Ok(*pricing.get(model).unwrap_or(&1.0))
+}
+
 /// Returns a JSON array of alternative models for a tier, sorted by cost ascending.
 /// Each entry: {"model": "...", "cost": ...}
 /// Used for billing fallback: try same-tier alternatives before escalating.
@@ -106,6 +113,7 @@ pub fn pybindings(m: &pyo3::Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(get_context_length, m)?)?;
     m.add_function(wrap_pyfunction!(get_fallback_model, m)?)?;
     m.add_function(wrap_pyfunction!(get_tier_default_model, m)?)?;
+    m.add_function(wrap_pyfunction!(get_model_cost, m)?)?;
     m.add_function(wrap_pyfunction!(get_tier_alternatives, m)?)?;
     m.add_function(wrap_pyfunction!(configure_providers, m)?)?;
     m.add_function(wrap_pyfunction!(reset_providers, m)?)?;

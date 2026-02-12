@@ -239,6 +239,37 @@ debot router test "implement a distributed cache with consistent hashing"
 debot router metrics
 ```
 
+**Router benchmarking (token cost savings):**
+
+We provide a lightweight benchmark that estimates token-cost savings by comparing router-selected models against fixed baselines.
+It uses open datasets from `benchmarks/` and a naive or `tiktoken`-based token estimator.
+
+```bash
+make benchmark-router
+```
+
+To change baselines or increase coverage:
+
+```bash
+python benchmarks/router_savings.py --max-samples 200 --configs-per-dataset 5 \
+  --baseline-models anthropic/claude-opus-4-5,openai/o3,openai/gpt-4o-mini
+```
+
+**Interpreting results:**
+- If the baseline is a very cheap model (e.g. `openai/gpt-4o-mini`), router cost can be higher by design.
+- For meaningful savings, compare against strong baselines like `anthropic/claude-opus-4-5` or `openai/o3`.
+
+**Latest benchmark snapshot (2026-02-12, `--max-samples 50`):**
+- prompts: 350
+- tokens (estimated): 9,453
+- router cost: $0.014898
+- baseline `anthropic/claude-opus-4-5`: $0.236325 → savings $0.221427 (93.70%)
+- baseline `openai/o3`: $0.075624 → savings $0.060726 (80.30%)
+- baseline `openai/gpt-4o-mini`: $0.005672 → savings -$0.009226 (-162.67%)
+
+Notes:
+- GAIA is gated on Hugging Face and will be skipped unless you provide `HF_TOKEN`.
+
 ## 🧠 Long-term memory
 
 Debot stores persistent memory under your workspace at `memory/` (by default your workspace is `~/.debot/workspace`). The memory system supports:
