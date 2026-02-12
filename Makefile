@@ -6,6 +6,7 @@ MATURIN ?= maturin
 PYO3_USE_ABI3_FORWARD_COMPATIBILITY ?= 1
 
 .PHONY: lint lint-check format format-rust test install build deps-build
+.PHONY: benchmark
 
 lint: deps-build
 	$(RUFF) format debot/
@@ -29,3 +30,13 @@ test: build
 		$(PIP) install $$WHEEL
 	$(PIP) install ".[dev]"
 	$(PYTEST) tests/ -v --tb=short
+
+benchmark:
+	$(PIP) install -r benchmarks/requirements.txt
+	$(PYTHON) benchmarks/run_all.py --max-samples 5
+
+benchmark-router: build
+	@WHEEL=$$(ls -1t rust/target/wheels/*.whl | head -n 1); \
+	$(PIP) install $$WHEEL
+	$(PIP) install -r benchmarks/requirements.txt
+	$(PYTHON) benchmarks/router_savings.py --max-samples 50

@@ -178,9 +178,15 @@ class TelegramChannel(BaseChannel):
         # Split into chunks if too long
         chunks = self._split_message(html_content, max_len)
 
+        thread_id = msg.metadata.get("message_thread_id") if msg.metadata else None
         for chunk in chunks:
             try:
-                await self._app.bot.send_message(chat_id=chat_id, text=chunk, parse_mode="HTML")
+                await self._app.bot.send_message(
+                    chat_id=chat_id,
+                    text=chunk,
+                    parse_mode="HTML",
+                    message_thread_id=thread_id,
+                )
             except Exception as e:
                 # Fallback to plain text if HTML parsing fails
                 logger.warning(f"HTML parse failed, falling back to plain text: {e}")
@@ -188,7 +194,11 @@ class TelegramChannel(BaseChannel):
                     # Split plain text too
                     plain_chunks = self._split_message(msg.content, max_len)
                     for plain_chunk in plain_chunks:
-                        await self._app.bot.send_message(chat_id=chat_id, text=plain_chunk)
+                        await self._app.bot.send_message(
+                            chat_id=chat_id,
+                            text=plain_chunk,
+                            message_thread_id=thread_id,
+                        )
                     break  # Don't continue with HTML chunks
                 except Exception as e2:
                     logger.error(f"Error sending Telegram message: {e2}")
@@ -328,6 +338,7 @@ class TelegramChannel(BaseChannel):
             media=media_paths,
             metadata={
                 "message_id": message.message_id,
+                "message_thread_id": getattr(message, "message_thread_id", None),
                 "user_id": user.id,
                 "username": user.username,
                 "first_name": user.first_name,

@@ -1,7 +1,7 @@
 [project]
 name = "debot"
-version = "0.1.7"
-description = "A lightweight and secure personal AI assistant framework"
+version = "0.1.8"
+description = "DeBot: A lightweight and secure personal AI assistant framework for decentralized agent world."
 requires-python = ">=3.11"
 license = {file = "LICENSE"}
 authors = [

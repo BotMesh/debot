@@ -1,0 +1,13 @@
+version: "3.8"
+
+services:
+  debot:
+    image: ghcr.io/botmesh/debot:latest
+    pull_policy: always
+    container_name: debot
+    command: ["gateway"]
+    ports:
+      - "18790:18790"
+    volumes:
+      - /data/.debot:/root/.debot
+    restart: unless-stopped
